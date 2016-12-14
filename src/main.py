@@ -1,6 +1,7 @@
 import gym
 import random
 import numpy as np
+import agent
 
 def EpisodeStartStr(num):
 	epi_str = '============\n'
@@ -30,17 +31,17 @@ for i_episode in range(1):
 
 	initial_gamestate = env.reset()
 	gamestate = initial_gamestate
+	env.render()
 
 	for i_step in range(3):
-	    env.render()
-
-
-    	''' Legal Actions '''
-    	legal_actions = env.get_possible_actions(gamestate)
-
-    	''' Random action '''
-    	action = np.random.choice(legal_actions)
-
-    	gamestate, reward, done, info = env.step(action)
-
+		''' Legal Actions '''
+		legal_actions = env.get_possible_actions(gamestate)
+		
+		''' Random action '''
+		action = np.random.choice(legal_actions)
+		if env.valid_move(gamestate, action):
+			gamestate, reward, done, info = env.step(action)
+		else:
+			print 'ERROR'
+		env.render()
     	#env.make_move(gamestate, action, 0)
