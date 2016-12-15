@@ -5,9 +5,7 @@ def RandomAgent(gameState):
 	
 	legal_actions = HexEnv.get_possible_actions(gameState)
 	if len(legal_actions) == 0:
-		l = gameState[0].shape[0]
-		w = gameState[0].shape[1]
-		action = l*w
+		action = 'resign'
 	else:
 		action = np.random.choice(legal_actions)
 	return action
@@ -24,6 +22,10 @@ def evaluationFunction(gameState):
 
 def ExpectimaxAgent(gameState, max_depth=1):
 
+	legal_actions = HexEnv.get_possible_actions(gameState)	
+	if len(legal_actions) == 0:
+		return 'resign'
+	
 	INT_MAX = 999999
 	PLAYER = 0
 	
