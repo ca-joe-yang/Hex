@@ -9,7 +9,6 @@ def EpisodeStartStr(num):
 	epi_str += '============\n\n'
 	return epi_str
 try:
-	gym = reload(gym)
 	gym.envs.register(
     	id='MyHex-v0',
     	entry_point='gym.envs.board_game:HexEnv',
@@ -22,26 +21,21 @@ try:
     	},
 	)
 except Exception as e:
-	print 'Already registered'
+	print('Already registered')
 
 env = gym.make('MyHex-v0')
 
 for i_episode in range(1):
-	print EpisodeStartStr(i_episode+1)
+	print(EpisodeStartStr(i_episode+1))
 
 	initial_gamestate = env.reset()
 	gamestate = initial_gamestate
 	env.render()
 
-	for i_step in range(3):
-		''' Legal Actions '''
-		legal_actions = env.get_possible_actions(gamestate)
-		
-		''' Random action '''
-		action = np.random.choice(legal_actions)
-		if env.valid_move(gamestate, action):
-			gamestate, reward, done, info = env.step(action)
-		else:
-			print 'ERROR'
+	while not env.done:
+		action = agent.RandomAgent(env)
+
+		gamestate, reward, done, info = env.step(action)
+
 		env.render()
     	#env.make_move(gamestate, action, 0)
