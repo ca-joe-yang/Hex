@@ -1,13 +1,31 @@
-from gym.envs.board_game.hex import HexEnv
 import numpy as np
 
 def RandomAgent(gameState):
-	
-	legal_actions = HexEnv.get_possible_actions(gameState)
-	if len(legal_actions) == 0:
-		action = 'resign'
-	else:
-		action = np.random.choice(legal_actions)
+	legalActions = gameState.getLegalActions()
+	actionIndex = np.random.choice(range(len(legalActions)))
+	action = legalActions[actionIndex]
+	return action
+
+def HumanAgent(gameState):
+	legalActions = gameState.getLegalActions()
+	while True:
+		yourMoveStr = input('Your move: ')
+		tokens = yourMoveStr.split(',')
+		if len(tokens) != 2:
+			print('Illegal input!')
+			continue
+		action = tuple([int(i) for i in tokens])
+		if action not in legalActions:
+			print('Illegal action!')
+			continue
+		break
+	return action
+
+def NoDeadCellRandomAgent(gameState):
+	legalActions = gameState.getLegalActions()
+	goodActions = [a for a in legalActions if not gameState.isDeadCell(a)]
+	actionIndex = np.random.choice(range(len(goodActions)))
+	action = goodActions[actionIndex]
 	return action
 
 def OnlyAttackAgent(gameState):
