@@ -25,7 +25,7 @@ class HexEnv():
 		assert player in [1,2]
 		self.playerAgent[player] = agent
 
-	def step(self, action, player):
+	def _step(self, action, player):
 		assert self.toPlay == player, 'Wrong Player'
 		self.gameState.makeMove(action, player)
 
@@ -35,7 +35,7 @@ class HexEnv():
 			gameState = self.gameState
 			#print(player)
 			action = self.playerAgent[player](gameState)
-			self.step(action, player)
+			self._step(action, player)
 			self.toPlay = 3-player
 
 			if self.verbose:
@@ -79,6 +79,14 @@ class HexGameState:
 			2: (boardSize+1, 1)
 		}
 
+	def	_getAllCells(self, player=None):
+		cellsList = []
+		for x in range(self.board.shape[0]):
+			for y in range(self.board.shape[1]):
+				if player == None or self.board[x, y] == player:
+					cellsList.append((x,y))
+		return cellsList
+
 	def makeMove(self, action, player):
 		if self.board[action[0], action[1]] == 0:
 			self.board[action[0], action[1]] = player
@@ -86,8 +94,11 @@ class HexGameState:
 		else: 
 			return False
 
+	def getSuccessorStates(self, player):
+		return
+
 	def isGoalState(self):
-		legalActions = self.getAllCells(0)
+		legalActions = self.getLegalActions()
 
 		for player in [1,2]:
 			if self.isPlayerWin(player):
@@ -97,26 +108,29 @@ class HexGameState:
 
 		return -1
 
-	def	getAllCells(self, player=None):
+
+	def getAllLegalCells(self):
 		cellsList = []
-		for x in range(self.board.shape[0]):
-			for y in range(self.board.shape[1]):
-				if player == None or self.board[x, y] == player:
-					cellsList.append((x,y))
+		for x in range(1, self.board.shape[0]-1):
+			for y in range(1, self.board.shape[1]-1):
+				cellsList.append((x,y))
 		return cellsList
 
 	def getLegalActions(self):
-		return self.getAllCells(0)
+		return self._getAllCells(0)
 
 	def getNeighbors(self, center, player=None, onlyList=None):
 		neighbors = []
-		if onlyList == None: onlyList = self.getAllCells()
+		if onlyList == None: onlyList = self._getAllCells()
 		for n in onlyList:
 			if not self.isNeighbor(center, n):
 				continue
 			if player == None or self.board[n[0], n[1]] == player:
 				neighbors.append(n)
 		return neighbors
+
+	def getLegalNeighbors(self, center):
+		return getNeighbors(center, 0, self.getAllLegalCells())
 
 	def isNeighbor(self, coordinate1, coordinate2):
 		x1, y1 = coordinate1
@@ -130,8 +144,6 @@ class HexGameState:
 		return False
 
 	def isPlayerWin(self, player):
-		playerMoves = self.getAllCells(player)
-
 		frontier = set()
 		explored = set()
 		frontier.add(self.start[player])
