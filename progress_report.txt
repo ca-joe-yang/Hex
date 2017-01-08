@@ -1,0 +1,22 @@
+
+我們這組的題目是製作hex棋的AI。
+到目前為止，我們已經可以藉由gym的介面進行人機對戰，
+並可以自由設定遊戲環境。
+目前有將上課學過的一些較簡單的方法，如expecti-max實作在AI agent上。
+另外我們發現gym的hex介面本身有些bug，我們已將其解決。
+
+而目前在train棋類AI的方法中，
+Monte-Carlo, Reinforcement Learning可以製造很強大的performance，
+所以我們也規劃之後實作一些RL方法，如DQN。
+而今年7月時，Deepmind發表一篇改進DQN方法的論文：A3C。
+由於DQN的training需要很久的時間，
+而A3C能夠以縮短數倍的時間內達到更好的performance，
+我們認為這也很有實作的價值。
+
+另外我們有在網路上找到曾經參加Computer Olympiad Hex競賽，
+並在每一屆中（最新一屆為2011年）包辦第一、二名的兩種AI： MoHex及Wolve，
+他們被共同包在benzene package中。
+我們之後打算研究他們的algorithms看看能否改善我們的AI。
+
+以上就是我們這組目前的進度，
+謝謝老師！
