@@ -31,8 +31,8 @@ def NoDeadCellRandomAgent(gameState):
 def BetterRandomAgent(gameState):
 	legalActions = gameState.getLegalActions()
 	for a in legalActions:
-		print(gameState.getSuccessorState(a, 1).board)
-	return a
+		#print(gameState.getNextState(a, 1).board)
+		return a
 
 def OnlyAttackAgent(gameState):
 	action = 0

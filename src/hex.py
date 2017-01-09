@@ -10,17 +10,25 @@ WHITE = 2
 class HexEnv():
 
 	def __init__(self, boardSize, verbose=True):
-		self.reset(boardSize)
+		self.setHexStateParameter(boardSize)
+		self.reset()
 		self.verbose = verbose
 		self.playerAgent = { 1: None, 2: None }
 
-	def _step(self, action, player):
-		assert self.toPlay == player, 'Wrong Player'
-		self.gameState.makeMove(action, player)
+	def step(self, action, player):
+		self.gameState = self.gameState.getNextState(action, player)
 
-	def reset(self, boardSize):
-		self.gameState = HexGameState(boardSize)
-		self.toPlay = 1
+	def setHexStateParameter(self, boardSize):
+		HexState.BOARD_SIZE = boardSize
+		HexState.END_CELL = {
+			1: (1, boardSize+1),
+			2: (boardSize+1, 1)
+		}
+
+	def reset(self, boardSize=None):
+		if boardSize != None:
+			self.setHexStateParameter(boardSize)
+		self.gameState = HexState()
 
 	def setPlayerAgent(self, player, agent):
 		assert player in [1,2]
@@ -28,22 +36,17 @@ class HexEnv():
 
 
 	def autoPlay(self):
-		while True:
-			player = self.toPlay
+		while not self.gameState.isGoalState():
 			gameState = self.gameState
-			#print(player)
+			player = gameState.nextPlayer
 			action = self.playerAgent[player](gameState)
-			self._step(action, player)
-			self.toPlay = 3-player
+			self.step(action, player)
 
 			if self.verbose:
 				self.render()
-			
-			result = self.gameState.isGoalState()
-			if result != -1:
-				break
 
-		return result
+	def getWinner(self):
+		return self.gameState.getWinner()
 
 	def render(self):
 		outfile = sys.stdout
@@ -51,6 +54,8 @@ class HexEnv():
 
 
 class HexState:
+
+	BOARD_SIZE = None
 
 	NEIGHBORNG_DIRECTION = [ 
 		(-1, 0), 
@@ -70,28 +75,28 @@ class HexState:
 	]
 
 	START_CELL = {
-		1: (1, 0)
+		1: (1, 0),
 		2: (0, 1)
 	}
 	END_CELL = {
-		1: ()
-
+		1: None,
+		2: None
 	}
 
-	def __init__(self, boardSize):
-		self.N = boardSize
+	def __init__(self):
+		assert HexState.BOARD_SIZE != None
 		self.board = {}
-		for x in range(self.N):
-			for y in range(self):
-				self.board[(x+1,y+1)] == 0
-		for i in range(self.N):
+		for x in range(HexState.BOARD_SIZE):
+			for y in range(HexState.BOARD_SIZE):
+				self.board[(x+1,y+1)] = 0
+		for i in range(HexState.BOARD_SIZE):
 			self.board[(i+1, 0)] = 1
 			self.board[(0, i+1)] = 2
-			self.board[(i+1, self.N+1)] = 1
-			self.board[(self.N+1, i+1)] = 2
+			self.board[(i+1, HexState.BOARD_SIZE+1)] = 1
+			self.board[(HexState.BOARD_SIZE+1, i+1)] = 2
 		self.nextPlayer = 1
 
-	def _copy(self):
+	def copy(self):
 		import copy
 		state = copy.deepcopy(self)
 		return state
@@ -99,10 +104,10 @@ class HexState:
 	def __str__(self):
 
 		board = self.board
-		boardSize = self.N
+		boardSize = HexState.BOARD_SIZE
 		
 		cellWidth = 5
-		lineLength = cellWidth * (boardSize-1) + boardSize + 2
+		lineLength = cellWidth * (boardSize+1) + boardSize + 2
 
 		halfCellWidth = 3
 		halfLineLength = int(lineLength / 2)
@@ -148,7 +153,7 @@ class HexState:
 		return ('\n'.join(lines))
 
 	def getAllCells(self, player=None):
-		if not player:
+		if player == False:
 			return [ c for c in self.board.keys() if self.board[c] == player]
 		return self.board.keys()
 
@@ -164,12 +169,13 @@ class HexState:
 		nextState = self.copy()
 		assert self.isLegalAction(action, player)
 		nextState.board[action] = player
+		nextState.nextPlayer = 3-player
 		return nextState
 
 	def getNeighbors(self, center, player=None, checkList=None):
 		neighbors = []
 		if checkList == None: checkList = self.getAllCells()
-		for d in self.NEIGHBORNG_DIRECTION:
+		for d in HexState.NEIGHBORNG_DIRECTION:
 			c = (center[0]+d[0], center[1]+d[1])
 			if c not in checkList:
 				continue
@@ -186,7 +192,7 @@ class HexState:
 		#allCells = self.getAllCells()
 
 		neighborsPattern = []
-		for dx, dy in self.NEIGHBORNG_DIRECTION:
+		for dx, dy in HexState.NEIGHBORNG_DIRECTION:
 			c = (center[0]+dx, center[1]+dy)
 			if (x,y) not in self.board:
 				neighborsPattern.append(0)
@@ -207,38 +213,34 @@ class HexState:
 					return True
 		return False
 
-	def getReward(self, player):
-		
-		frontier = set()
-		explored = set()
-		frontier.add(self.start[player])
-
-		while len(frontier) != 0:
-			node = frontier.pop()
-			if node == self.end[player]:
-				return True
-			for neighbor in self.getNeighbors(node, player):
-				if neighbor not in explored:
-					frontier.add(neighbor)
-			explored.add(node)
-		return False
-
-
-	def isGoalState(self):
-		legalActions = self.getLegalActions()
-
+	def getWinner(self):
 		for player in [1,2]:
-			if self.isPlayerWinner(player):
-				return True
+			if self.isWinner(player):
+				return player
+		legalActions = self.getLegalActions()
 		if len(legalActions) == 0:
-			return False
-
+			return 0
 		return -1
 
+	def isWinner(self, player):
+		frontier = set()
+		explored = set()
+		frontier.add(HexState.START_CELL[player])
 
+		while len(frontier) != 0:
+			cell = frontier.pop()
+			if cell == HexState.END_CELL[player]:
+				return True
+			for neighbor in self.getNeighbors(cell, player):
+				if neighbor not in explored:
+					frontier.add(neighbor)
+			explored.add(cell)
+		return False
 
-
-
+	def isGoalState(self):
+		if self.getWinner() != -1:
+			return True
+		return False
 
 def isNeighbor(coordinate1, coordinate2):
 	x1, y1 = coordinate1
@@ -257,42 +259,6 @@ def isPatternsMatched(pattern, targetPattern):
 		if p1 != p2:
 			return False
 	return True
-
-
-		self.start = {
-			1: (1, 0),
-			2: (0, 1)
-		}
-		self.end = {
-			1: (1, boardSize+1),
-			2: (boardSize+1, 1)
-		}
-
-	def makeMove(self, action, player):
-		if self.board[action[0], action[1]] == 0:
-			self.board[action[0], action[1]] = player
-			return True
-		else: 
-			return False
-
-	def isGoalState(self):
-		legalActions = self.getLegalActions()
-
-		for player in [1,2]:
-			if self.isPlayerWin(player):
-				return player
-		if len(legalActions) == 0:
-			return 0
-
-		return -1
-
-
-
-
-
-	def isPlayerWin(self, player):
-
-
 
 
 
