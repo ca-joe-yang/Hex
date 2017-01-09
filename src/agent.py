@@ -64,7 +64,7 @@ class UCTAgent(Agent):
 		self.nodes = {}
 
 		self.simulationTimeLimit = float(kwargs.get('time', 30))
-		self.simulationActionsLimit = int(kwargs.get('max_actions', 50))
+		self.simulationActionsLimit = int(kwargs.get('max_actions', 1000))
 
 		# Exploration constant, increase for more exploratory actions,
 		# decrease to prefer actions with known higher win rates.
@@ -83,7 +83,7 @@ class UCTAgent(Agent):
 		# Bail out early if there is no real choice to be made.
 		if len(legalActions) == 0:
 			return None
-		if len(legalActions) >= 15:
+		if len(legalActions) >= 25:
 			return random.choice(legalActions)
 
 		simulationCount = 0
@@ -95,25 +95,23 @@ class UCTAgent(Agent):
 		print('Simulation counts: ', simulationCount)
 		print('Search max depth: ', self.maxDepth)
 		print('Time elapsed: ', time.time() - beginTime)
-		for x in self.nodes:
-			visits = self.nodes[x].visits
-			if visits > 1:
-				print(x)
-				print(self.nodes[x].value)
-				print(self.nodes[x].visits)
+		#print(self.nodes.keys()[1])
 
+		player = gameState.nextPlayer
+		bestAction = None
+		bestScore = -9999
+		for action in legalActions:
+			nextState = gameState.getNextState(action, player)
+			if (player, nextState) not in self.nodes:
+				continue
+			value = self.nodes[ (player, nextState) ].value
+			visits = self.nodes[ (player, nextState) ].visits
+			score = value/visits
+			if score > bestScore:
+				bestScore = score
+				bestAction = action
 
-		
-		actions_states = ((p, self.board.next_state(state, p)) for p in legal)
-        return sorted(
-            ({'action': p,
-              'average': self.stats[(player, S)].value / self.stats[(player, S)].visits,
-              'sum': self.stats[(player, S)].value,
-              'plays': self.stats[(player, S)].visits}
-             for p, S in actions_states),
-            key=lambda x: (x['average'], x['plays']),
-            reverse=True
-        )
+		return bestAction
 
 		# Store and display the stats for each possible action.
 		#self.data['actions'] = self.calculate_action_values(state, player, legal)
@@ -175,7 +173,7 @@ class UCTAgent(Agent):
 			S.visits += 1
 			#print(state.getReward(player))
 			S.value += currentState.getReward(player)
-			#print(S)
+			#print(self.nodes[(player, state)])
 
 
 def NoDeadCellRandomAgent(gameState):

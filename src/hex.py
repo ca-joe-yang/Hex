@@ -101,6 +101,27 @@ class HexState:
 		state = copy.deepcopy(self)
 		return state
 
+	def __hash__(self):
+		hashkey = []
+		for x in range(HexState.BOARD_SIZE):
+			for y in range(HexState.BOARD_SIZE):
+				hashkey.append(self.board[(x+1,y+1)])
+		return hash(tuple(hashkey))
+
+	def __eq__(self, other):
+		return self.__hash__() == other.__hash__()
+
+	def __lt__(self, other):
+		return self.__hash__() < other.__hash__()
+
+	def __cmp__(self, other):
+		if self.__hash__() < other.__hash__():
+			return -1
+		elif self.__hash__() > other.__hash__():
+			return 1
+		else:
+			return 0
+
 	def __str__(self):
 
 		board = self.board

@@ -2,9 +2,9 @@ import numpy as np
 from agent import *
 from hex import HexEnv
 
-episodeNum = 1
+episodeNum = 100
 
-env = HexEnv(5, True)
+env = HexEnv(6, False)
 
 env.setPlayerAgent(1, UCTAgent())
 env.setPlayerAgent(2, BetterRandomAgent())
@@ -15,6 +15,7 @@ for i in range(episodeNum):
 	env.autoPlay()
 	winner = env.getWinner()
 	winCount[winner] += 1
+	print('Winner ', winner)
 
 print('Player 1 win: ', winCount[1], ' / ', episodeNum)
 print('Player 2 win: ', winCount[2], ' / ', episodeNum)
