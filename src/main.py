@@ -2,9 +2,9 @@ import numpy as np
 import agent
 from hex import HexEnv
 
-episodeNum = 10
+episodeNum = 100
 
-env = HexEnv(6, True)
+env = HexEnv(6, False)
 
 env.setPlayerAgent(1, agent.RandomAgent)
 env.setPlayerAgent(2, agent.MonteCarloTreeSearchAgent)

@@ -160,14 +160,16 @@ class HexState:
 	def getLegalActions(self):
 		return self.getAllCells(0)
 
-	def isLegalAction(self, action, player):
-		if player != self.nextPlayer:
+	def isLegalAction(self, action, player, prediction=False):
+		if not prediction and player != self.nextPlayer:
 			return False
 		return action in self.getLegalActions()
 
-	def getNextState(self, action, player):
+	def getNextState(self, action, player=None, prediction=False):
 		nextState = self.copy()
-		assert self.isLegalAction(action, player)
+		if player == None:
+			player = self.nextPlayer
+		assert self.isLegalAction(action, player, prediction)
 		nextState.board[action] = player
 		nextState.nextPlayer = 3-player
 		return nextState
@@ -194,7 +196,7 @@ class HexState:
 		neighborsPattern = []
 		for dx, dy in HexState.NEIGHBORNG_DIRECTION:
 			c = (center[0]+dx, center[1]+dy)
-			if (x,y) not in self.board:
+			if c not in self.board:
 				neighborsPattern.append(0)
 			else:	
 				neighborsPattern.append(self.board[c])
@@ -241,6 +243,22 @@ class HexState:
 		if self.getWinner() != -1:
 			return True
 		return False
+
+	def mustPlayAction(self):
+		legalActions = self.getLegalActions()
+		player = self.nextPlayer
+		opponent = 3-player
+		for action in legalActions:
+			nextState = self.getNextState(action, player)
+			if nextState.getWinner() == player:
+				return action
+		for action in legalActions:
+			nextState = self.getNextState(action, opponent, True)
+			if nextState.getWinner() == opponent:
+				return action
+		return None
+
+
 
 def isNeighbor(coordinate1, coordinate2):
 	x1, y1 = coordinate1
