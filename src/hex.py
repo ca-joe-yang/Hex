@@ -1,13 +1,10 @@
 import sys
 import numpy as np
 
-
-
 '''
 NOTHING = 0
 BLACK = 1
 WHITE = 2
-
 '''
 
 class HexEnv():
@@ -17,6 +14,10 @@ class HexEnv():
 		self.verbose = verbose
 		self.playerAgent = { 1: None, 2: None }
 
+	def _step(self, action, player):
+		assert self.toPlay == player, 'Wrong Player'
+		self.gameState.makeMove(action, player)
+
 	def reset(self, boardSize):
 		self.gameState = HexGameState(boardSize)
 		self.toPlay = 1
@@ -25,9 +26,6 @@ class HexEnv():
 		assert player in [1,2]
 		self.playerAgent[player] = agent
 
-	def _step(self, action, player):
-		assert self.toPlay == player, 'Wrong Player'
-		self.gameState.makeMove(action, player)
 
 	def autoPlay(self):
 		while True:
@@ -52,162 +50,58 @@ class HexEnv():
 		outfile.write(str(self.gameState))
 
 
-class HexGameState:
+class HexState:
+
+	NEIGHBORNG_DIRECTION = [ 
+		(-1, 0), 
+		(-1, 1),
+		(0, 1),
+		(1, 0),
+		(1, -1),
+		(0, -1)
+	]
+
+	DEAD_CELL_PATTERN = [ 
+		[1, 1, 1, 1, None, None],
+		[2, 2, 2, 2, None, None],
+		[1, 1, None, 2, 2, None],
+		[1, None, 2, 2, 2, None],
+		[2, None, 1, 1, 1, None],
+	]
+
+	START_CELL = {
+		1: (1, 0)
+		2: (0, 1)
+	}
+	END_CELL = {
+		1: ()
+
+	}
 
 	def __init__(self, boardSize):
-		self.board = np.zeros((boardSize+2, boardSize+2), dtype=np.int32)
-		self.board[:, 0] = 1
-		self.board[0, :] = 2
-		self.board[boardSize+1, :] = 2
-		self.board[:, boardSize+1] = 1
+		self.N = boardSize
+		self.board = {}
+		for x in range(self.N):
+			for y in range(self):
+				self.board[(x+1,y+1)] == 0
+		for i in range(self.N):
+			self.board[(i+1, 0)] = 1
+			self.board[(0, i+1)] = 2
+			self.board[(i+1, self.N+1)] = 1
+			self.board[(self.N+1, i+1)] = 2
+		self.nextPlayer = 1
 
-		self.neighboringDirection = [ 
-			(-1, 0), 
-			(-1, 1),
-			(0, 1),
-			(1, 0),
-			(1, -1),
-			(0, -1)
-		]
-
-		self.start = {
-			1: (1, 0),
-			2: (0, 1)
-		}
-		self.end = {
-			1: (1, boardSize+1),
-			2: (boardSize+1, 1)
-		}
-
-	def	_getAllCells(self, player=None):
-		cellsList = []
-		for x in range(self.board.shape[0]):
-			for y in range(self.board.shape[1]):
-				if player == None or self.board[x, y] == player:
-					cellsList.append((x,y))
-		return cellsList
-
-	def makeMove(self, action, player):
-		if self.board[action[0], action[1]] == 0:
-			self.board[action[0], action[1]] = player
-			return True
-		else: 
-			return False
-
-	def getSuccessorStates(self, player):
-		return
-
-	def isGoalState(self):
-		legalActions = self.getLegalActions()
-
-		for player in [1,2]:
-			if self.isPlayerWin(player):
-				return player
-		if len(legalActions) == 0:
-			return 0
-
-		return -1
-
-
-	def getAllLegalCells(self):
-		cellsList = []
-		for x in range(1, self.board.shape[0]-1):
-			for y in range(1, self.board.shape[1]-1):
-				cellsList.append((x,y))
-		return cellsList
-
-	def getLegalActions(self):
-		return self._getAllCells(0)
-
-	def getNeighbors(self, center, player=None, onlyList=None):
-		neighbors = []
-		if onlyList == None: onlyList = self._getAllCells()
-		for n in onlyList:
-			if not self.isNeighbor(center, n):
-				continue
-			if player == None or self.board[n[0], n[1]] == player:
-				neighbors.append(n)
-		return neighbors
-
-	def getLegalNeighbors(self, center):
-		return getNeighbors(center, 0, self.getAllLegalCells())
-
-	def isNeighbor(self, coordinate1, coordinate2):
-		x1, y1 = coordinate1
-		x2, y2 = coordinate2
-
-		dx = x1 - x2
-		dy = y1 - y2
-		for c in self.neighboringDirection:
-			if (dx, dy) == c:
-				return True
-		return False
-
-	def isPlayerWin(self, player):
-		frontier = set()
-		explored = set()
-		frontier.add(self.start[player])
-
-		while len(frontier) != 0:
-			node = frontier.pop()
-			if node == self.end[player]:
-				return True
-			for neighbor in self.getNeighbors(node, player):
-				if neighbor not in explored:
-					frontier.add(neighbor)
-			explored.add(node)
-		return False
-
-	def isDeadCell(self, coordinate):
-		deadCellPattern = [ 
-			[1, 1, 1, 1, None, None],
-			[2, 2, 2, 2, None, None],
-			[1, 1, None, 2, 2, None],
-			[1, None, 2, 2, 2, None],
-			[2, None, 1, 1, 1, None],
-		]
-
-		neighborsState = self.getNeighborsState(coordinate)
-
-		for p in deadCellPattern:
-			pattern = p[:]
-			for r in range(6):
-				x = pattern.pop()
-				pattern.insert(0, x)
-				print(coordinate, neighborsState, pattern)
-				if self.isNeighborsStateMatchPattern(neighborsState, pattern):
-					return True
-		return False
-
-	def getNeighborsState(self, center):
-		board = self.board
-		allCells = self.getAllCells()
-
-		neighborsState = []
-		for dx, dy in self.neighboringDirection:
-			x = center[0] + dx
-			y = center[1] + dy
-			if (x,y) not in allCells:
-				neighborsState.append(0)
-			else:	
-				neighborsState.append(board[x][y])
-		return neighborsState
-
-	def isNeighborsStateMatchPattern(self, neighborsState, pattern):
-
-		for i, j in zip(neighborsState, pattern):
-			if j == None:
-				continue
-			if i != j:
-				return False
-		return True
-
+	def _copy(self):
+		import copy
+		state = copy.deepcopy(self)
+		return state
 
 	def __str__(self):
-		board = self.board
-		boardSize = self.board.shape[0]
-		cellWidth = 5
 
+		board = self.board
+		boardSize = self.N
+		
+		cellWidth = 5
 		lineLength = cellWidth * (boardSize-1) + boardSize + 2
 
 		halfCellWidth = 3
@@ -217,20 +111,21 @@ class HexGameState:
 		lines = []
 
 		indexStrList = [' ']
-		for x in range(boardSize-2):
+		for x in range(boardSize):
 			indexStrList.append(str(x+1))
 		lines.append('|  ' + '  |  '.join( indexStrList ) + '  |')	
 
-		for y in range(1,boardSize-1):
+		for y in range(boardSize):
 			cellStrList = []
-			for x in range(1,boardSize-1):
-				if board[x, y] == 0:
+			for x in range(boardSize):
+				c = (x+1, y+1)
+				if board[c] == 0:
 					cellStrList.append(' ')
-				elif board[x, y] == 1:
+				elif board[c] == 1:
 					cellStrList.append('B')
-				elif board[x, y] == 2:
+				elif board[c] == 2:
 					cellStrList.append('W')
-			lines.append('|  ' + str(y)  + '  |  ' +  '  |  '.join( cellStrList ) + '  |')
+			lines.append('|  ' + str(y+1)  + '  |  ' +  '  |  '.join( cellStrList ) + '  |')
 
 		lines.insert(0, ' '*halfLineLength+'B')
 		lines.append(' '*halfLineLength + 'B')
@@ -250,4 +145,155 @@ class HexGameState:
 
 		lines.append('')
 
-		return ('\n'.join(lines))		
+		return ('\n'.join(lines))
+
+	def getAllCells(self, player=None):
+		if not player:
+			return [ c for c in self.board.keys() if self.board[c] == player]
+		return self.board.keys()
+
+	def getLegalActions(self):
+		return self.getAllCells(0)
+
+	def isLegalAction(self, action, player):
+		if player != self.nextPlayer:
+			return False
+		return action in self.getLegalActions()
+
+	def getNextState(self, action, player):
+		nextState = self.copy()
+		assert self.isLegalAction(action, player)
+		nextState.board[action] = player
+		return nextState
+
+	def getNeighbors(self, center, player=None, checkList=None):
+		neighbors = []
+		if checkList == None: checkList = self.getAllCells()
+		for d in self.NEIGHBORNG_DIRECTION:
+			c = (center[0]+d[0], center[1]+d[1])
+			if c not in checkList:
+				continue
+			if player == None or self.board[c] == player:
+				neighbors.append(c)
+		return neighbors
+
+	def getLegalNeighbors(self, center):
+		return getNeighbors(center, 0)
+
+
+	def getNeighborsPattern(self, center):
+		board = self.board
+		#allCells = self.getAllCells()
+
+		neighborsPattern = []
+		for dx, dy in self.NEIGHBORNG_DIRECTION:
+			c = (center[0]+dx, center[1]+dy)
+			if (x,y) not in self.board:
+				neighborsPattern.append(0)
+			else:	
+				neighborsPattern.append(self.board[c])
+		return neighborsPattern
+
+	def isDeadCell(self, coordinate):
+		neighborsPattern = self.getNeighborsPattern(coordinate)
+
+		for p in self.DEAD_CELL_PATTERN:
+			pattern = p[:]
+			for r in range(6):
+				x = pattern.pop()
+				pattern.insert(0, x)
+				#print(coordinate, neighborsState, pattern)
+				if isPatternsMatched(neighborsPattern, pattern):
+					return True
+		return False
+
+	def getReward(self, player):
+		
+		frontier = set()
+		explored = set()
+		frontier.add(self.start[player])
+
+		while len(frontier) != 0:
+			node = frontier.pop()
+			if node == self.end[player]:
+				return True
+			for neighbor in self.getNeighbors(node, player):
+				if neighbor not in explored:
+					frontier.add(neighbor)
+			explored.add(node)
+		return False
+
+
+	def isGoalState(self):
+		legalActions = self.getLegalActions()
+
+		for player in [1,2]:
+			if self.isPlayerWinner(player):
+				return True
+		if len(legalActions) == 0:
+			return False
+
+		return -1
+
+
+
+
+
+
+def isNeighbor(coordinate1, coordinate2):
+	x1, y1 = coordinate1
+	x2, y2 = coordinate2
+
+	dx = x1 - x2
+	dy = y1 - y2
+
+	return direction in HexState.NEIGHBORNG_DIRECTION
+
+def isPatternsMatched(pattern, targetPattern):
+	assert len(pattern) == len(targetPattern)
+	for p1, p2 in zip(pattern, targetPattern):
+		if p2 == None:
+			continue
+		if p1 != p2:
+			return False
+	return True
+
+
+		self.start = {
+			1: (1, 0),
+			2: (0, 1)
+		}
+		self.end = {
+			1: (1, boardSize+1),
+			2: (boardSize+1, 1)
+		}
+
+	def makeMove(self, action, player):
+		if self.board[action[0], action[1]] == 0:
+			self.board[action[0], action[1]] = player
+			return True
+		else: 
+			return False
+
+	def isGoalState(self):
+		legalActions = self.getLegalActions()
+
+		for player in [1,2]:
+			if self.isPlayerWin(player):
+				return player
+		if len(legalActions) == 0:
+			return 0
+
+		return -1
+
+
+
+
+
+	def isPlayerWin(self, player):
+
+
+
+
+
+

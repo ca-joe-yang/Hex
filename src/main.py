@@ -7,11 +7,11 @@ episodeNum = 10
 env = HexEnv(1, False)
 
 env.setPlayerAgent(1, agent.RandomAgent)
-env.setPlayerAgent(2, agent.RandomAgent)
+env.setPlayerAgent(2, agent.BetterRandomAgent)
 
 winCount = { 1: 0, 2: 0, 0: 0 }
 for i in range(episodeNum):
-	env.reset(8)
+	env.reset(5)
 	result = env.autoPlay()
 	winCount[result] += 1
 
