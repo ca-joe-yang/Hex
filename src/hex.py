@@ -268,8 +268,20 @@ class HexMCTS(HexState):
         board += "\nPlayer " + state.nextPlayer + " to move."
         return board
 
-    def pack_state(self, state):
+    def pack_state(self, data):
+        state = HexMCTS()
+        board = {}
+        for cell in data[0]:
+            board[cell[0]] = cell[1]
+        state.board = board
+        state.nextPlayer = data[1]
         return state
+
+    def unpack_state(self, state):
+        board = []
+        for (x, y), value in state.board.iteritems():
+            board.append(((x, y), value))
+        return (tuple(board), state.nextPlayer)
 
     def pack_action(self, action):
         from ast import literal_eval as make_tuple
@@ -279,19 +291,29 @@ class HexMCTS(HexState):
         return str(action)
 
     def legal_actions(self, history):
-        return history[-1].getLegalActions()
+        try:
+            return history[-1].getLegalActions()
+        except AttributeError:
+            return self.pack_state(history[-1]).getLegalActions()
 
     def next_state(self, state, action):
-        return state.getNextState(action, state.nextPlayer)
+        try:
+            return self.unpack_state(state.getNextState(action, state.nextPlayer))
+        except AttributeError:
+            state = self.pack_state(state)
+            return self.unpack_state(state.getNextState(action, state.nextPlayer))
     
     def current_player(self, state):
-        return state.nextPlayer
+        try:
+            return state.nextPlayer
+        except AttributeError:
+            return state[-1]
         
     def is_ended(self, history):
-        return history[-1].isGoalState()
+        return self.pack_state(history[-1]).isGoalState()
 
     def win_values(self, history):
-        winner = history[-1].getWinner()
+        winner = self.pack_state(history[-1]).getWinner()
         if winner == 3:
             return {1: 0.5, 2: 0.5}
         if not winner:
