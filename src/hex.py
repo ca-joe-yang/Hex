@@ -28,7 +28,7 @@ class HexEnv():
 	def reset(self, boardSize=None):
 		if boardSize != None:
 			self.setHexStateParameter(boardSize)
-		self.gameState = HexMCTS()
+		self.gameState = HexState()
 
 	def setPlayerAgent(self, player, agent):
 		assert player in [1,2]
@@ -39,7 +39,7 @@ class HexEnv():
 		while not self.gameState.isGoalState():
 			gameState = self.gameState
 			player = gameState.nextPlayer
-			action = self.playerAgent[player](gameState)
+			action = self.playerAgent[player].getAction(gameState)
 			self.step(action, player)
 
 			if self.verbose:
@@ -223,6 +223,16 @@ class HexState:
 		if len(legalActions) == 0:
 			return 0
 		return -1
+
+	def getReward(self, player):
+		winner = self.getWinner()
+		opponent = 3-player
+		if winner == player:
+			return 1
+		elif winner == opponent:
+			return -1
+		else:
+			return 0
 
 	def isWinner(self, player):
 		frontier = set()

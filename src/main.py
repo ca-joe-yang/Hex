@@ -1,13 +1,13 @@
 import numpy as np
-import agent
+from agent import *
 from hex import HexEnv
 
-episodeNum = 100
+episodeNum = 1
 
-env = HexEnv(6, False)
+env = HexEnv(5, True)
 
-env.setPlayerAgent(1, agent.RandomAgent)
-env.setPlayerAgent(2, agent.MonteCarloTreeSearchAgent)
+env.setPlayerAgent(1, UCTAgent())
+env.setPlayerAgent(2, BetterRandomAgent())
 
 winCount = { 1: 0, 2: 0, 0: 0 }
 for i in range(episodeNum):

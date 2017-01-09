@@ -1,9 +1,10 @@
-import numpy as np
 from __future__ import division
+import numpy as np
+from abc import ABCMeta, abstractmethod
 
 import time
 from math import log, sqrt
-from random import choice
+import random
 
 class Agent:
 	def __init__(self):
@@ -30,7 +31,7 @@ class HumanAgent(Agent):
 	def __init__(self):
 		return
 
-	def getAction(self, gameState)
+	def getAction(self, gameState):
 		legalActions = gameState.getLegalActions()
 		while True:
 			yourMoveStr = input('Your move: ')
@@ -49,17 +50,21 @@ class HumanAgent(Agent):
 class UCTNode(object):
 	__slots__ = ('value', 'visits')
 
-	def __init__(self, value=0, visits=0):
+	def __init__(self, value=0.0, visits=0):
 		self.value = value
 		self.visits = visits
 
+	def __str__(self):
+		return('value: ' + str(self.value) + '\nvisits: ' + str(self.visits) + '\n')
+
+
 class UCTAgent(Agent):
 
-	def __ init__(self, **kwargs):
+	def __init__(self, **kwargs):
 		self.nodes = {}
 
-		self.calculationTime = float(kwargs.get('time', 30))
-		self.maxActions = int(kwargs.get('max_actions', 1000))
+		self.simulationTimeLimit = float(kwargs.get('time', 30))
+		self.simulationActionsLimit = int(kwargs.get('max_actions', 50))
 
 		# Exploration constant, increase for more exploratory actions,
 		# decrease to prefer actions with known higher win rates.
@@ -69,30 +74,46 @@ class UCTAgent(Agent):
 		# Causes the AI to calculate the best action from the
 		# current game state and return it.
 
-		self.max_depth = 0
+		self.maxDepth = 0
 		#self.data = {}
 		self.nodes.clear()
 
-		nowPlayer = gameState.nextPlayer
 		legalActions = gameState.getLegalActions()
 
 		# Bail out early if there is no real choice to be made.
 		if len(legalActions) == 0:
 			return None
-		if len(legalActions) == 1:
-			return legalActions[0]
+		if len(legalActions) >= 15:
+			return random.choice(legalActions)
 
 		simulationCount = 0
 		beginTime = time.time()
-		while time.time() - beginTime < self.calculationTime:
-			self.runSimulation()
+		while time.time() - beginTime < self.simulationTimeLimit:
+			self.runSimulation(gameState)
 			simulationCount += 1
 
 		print('Simulation counts: ', simulationCount)
 		print('Search max depth: ', self.maxDepth)
 		print('Time elapsed: ', time.time() - beginTime)
+		for x in self.nodes:
+			visits = self.nodes[x].visits
+			if visits > 1:
+				print(x)
+				print(self.nodes[x].value)
+				print(self.nodes[x].visits)
 
 
+		
+		actions_states = ((p, self.board.next_state(state, p)) for p in legal)
+        return sorted(
+            ({'action': p,
+              'average': self.stats[(player, S)].value / self.stats[(player, S)].visits,
+              'sum': self.stats[(player, S)].value,
+              'plays': self.stats[(player, S)].visits}
+             for p, S in actions_states),
+            key=lambda x: (x['average'], x['plays']),
+            reverse=True
+        )
 
 		# Store and display the stats for each possible action.
 		#self.data['actions'] = self.calculate_action_values(state, player, legal)
@@ -114,52 +135,47 @@ class UCTAgent(Agent):
 		nodes = self.nodes
 
 		explored = set()
-		nowPlayer = gameState.nextPlayer
-		maxActions = self.maxActions
+		currentState = gameState.copy()
 
 		expand = True
-		for t in range(maxActions):
-			legalActions = gameState.getLegalActions()
-			nextStates = [gameState.getNextState(action) for action in legalActions]
+		for t in range(self.simulationActionsLimit):
+			#print(t)
+			currentPlayer = currentState.nextPlayer
+			legalActions = currentState.getLegalActions()
+			nextStates = [currentState.getNextState(action) for action in legalActions]
 
-			if all( (player, nextState) in nodes for nextState in nextStates):
+			if all( (currentPlayer, nextState) in nodes for nextState in nextStates):
 				# UCB1
-				logSum = log( sum(nodes[ (player, nextState) ].visits for nextState in nextStates) or 1 )
-				value, state = max(
-					(( nodes[ (player, nextState) ].value / (nodes[ (player, nextState) ].visits or 1) ) +
-					self.C * sqrt( logSum / (nodes[ (player, nextState) ].visits or 1)), nextState )
+				logSum = log( sum(nodes[ (currentPlayer, nextState) ].visits for nextState in nextStates) or 1 )
+				value, currentState = max(
+					(( nodes[ (currentPlayer, nextState) ].value / (nodes[ (currentPlayer, nextState) ].visits or 1) ) +
+					self.C * sqrt( logSum / (nodes[ (currentPlayer, nextState) ].visits or 1)), nextState )
 					for nextState in nextStates
 				)
 			else:
-				state = choice(nextStates)
+				currentState = random.choice(nextStates)
 
-			if expand and (player, state) not in nodes:
+			if expand and (currentPlayer, currentState) not in nodes:
 				expand = False
-				nodes[ (player, state) ] = UCTNode()
+				nodes[ (currentPlayer, currentState) ] = UCTNode()
 				if t > self.maxDepth:
 					self.maxDepth = t
 
-			explored.add((player, state))
-			if state.isGoalState():
+			explored.add((currentPlayer, currentState))
+			#print(state)
+			if currentState.isGoalState():
 				break
-
+		#print(currentState)
 		# Back-propagation
-		winner = state.getWinner()
-		reward = {}
-		for player in [1,2]:
-			if winner == 0:
-				reward[player] = 0.0
-			elif winner == player:
-				reward[player] = 1.0
-			else:
-				reward[player] = -1.0
-
 		for player, state in explored:
 			if (player, state) not in nodes:
 				continue
 			S = nodes[ (player, state) ]
+			#print(S)
 			S.visits += 1
-			S.value += reward[player]
+			#print(state.getReward(player))
+			S.value += currentState.getReward(player)
+			#print(S)
 
 
 def NoDeadCellRandomAgent(gameState):
@@ -169,11 +185,25 @@ def NoDeadCellRandomAgent(gameState):
 	action = goodActions[actionIndex]
 	return action
 
-def BetterRandomAgent(gameState):
-	action = gameState.mustPlayAction()
-	if action != None:
+class BetterRandomAgent(Agent):
+
+	def __init__(self):
+		return
+
+	def getAction(self, gameState):
+		action = gameState.mustPlayAction()
+		if action != None:
+			return action
+		legalActions = gameState.getLegalActions()
+		goodActions = [a for a in legalActions if not gameState.isDeadCell(a)]
+		action = random.choice(goodActions)
 		return action
-	return NoDeadCellRandomAgent(gameState)
+
+
+
+
+
+
 
 
 
