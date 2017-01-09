@@ -1,6 +1,6 @@
-from hex import HexGameState
+from hex import HexState
 
-class HexMCTS(HexGameState):
+class HexMCTS(HexState):
     def display(self, state, action):
         board = str(state)
         board += "\nPlayed: " + action
