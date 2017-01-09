@@ -22,7 +22,7 @@ class UCT(object):
         self.max_depth = 0
         self.data = {}
 
-        self.calculation_time = float(kwargs.get('time', 30))
+        self.calculation_time = float(kwargs.get('time', 300))
         self.max_actions = int(kwargs.get('max_actions', 1000))
 
         # Exploration constant, increase for more exploratory actions,
