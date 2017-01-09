@@ -90,4 +90,8 @@ def ExpectimaxAgent(gameState, max_depth=1):
 	#print bestScore, bestAction
 	return bestAction
 
-
+def MonteCarloTreeSearchAgent(gameState):
+    from mcts import UCTValues
+    uct = UCTValues(gameState)
+    uct.history.append(gameState)
+    return uct.get_action()

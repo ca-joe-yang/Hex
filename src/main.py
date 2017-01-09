@@ -6,8 +6,8 @@ episodeNum = 100
 
 env = HexEnv(6, False)
 
-env.setPlayerAgent(1, agent.BetterRandomAgent)
-env.setPlayerAgent(2, agent.RandomAgent)
+env.setPlayerAgent(1, agent.RandomAgent)
+env.setPlayerAgent(2, agent.MonteCarloTreeSearchAgent)
 
 winCount = { 1: 0, 2: 0, 0: 0 }
 for i in range(episodeNum):
