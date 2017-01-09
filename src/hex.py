@@ -165,8 +165,10 @@ class HexState:
 			return False
 		return action in self.getLegalActions()
 
-	def getNextState(self, action, player, prediction=False):
+	def getNextState(self, action, player=None, prediction=False):
 		nextState = self.copy()
+		if player == None:
+			player = self.nextPlayer
 		assert self.isLegalAction(action, player, prediction)
 		nextState.board[action] = player
 		nextState.nextPlayer = 3-player
