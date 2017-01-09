@@ -29,10 +29,10 @@ def NoDeadCellRandomAgent(gameState):
 	return action
 
 def BetterRandomAgent(gameState):
-	legalActions = gameState.getLegalActions()
-	for a in legalActions:
-		#print(gameState.getNextState(a, 1).board)
-		return a
+	action = gameState.mustPlayAction()
+	if action != None:
+		return action
+	return NoDeadCellRandomAgent(gameState)
 
 def OnlyAttackAgent(gameState):
 	action = 0
