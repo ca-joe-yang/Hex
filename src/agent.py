@@ -1,40 +1,96 @@
-from __future__ import division
+import time
+import random
 import numpy as np
 from abc import ABCMeta, abstractmethod
-
-import time
 from math import log, sqrt
-import random
+from collections import defaultdict
+#from hex import HexState
 
 class Agent:
-	def __init__(self):
-		return
+	def __init__(self, player):
+		self.player = player
+		self.opponent = 3-player
+		self.actionNum = 0
+		self.capturedZone = []
 
 	@abstractmethod
 	def getAction(self, gameState): 
 		pass
 
+	def getName(self):
+		if self.player == 1:
+			return 'BLACK'
+		elif self.player == 2:
+			return 'WHITE'
+
+	def evaluationFunction(self, gameState):
+		begin = time.time()
+		analysis = gameState.analysis()
+		player = self.player
+		opponent = self.opponent
+		#print(time.time()-begin)
+
+		score = 100 * gameState.getReward(player)
+		score += 50 * len(analysis['check'][player])
+		score -= 49 * len(analysis['check'][opponent])
+		score -= 5 * len(analysis['dead'][player])
+		score += 5 * len(analysis['dead'][opponent])
+		score += 5 * len(analysis['captured'][player])
+		score -= 5 * len(analysis['captured'][opponent])
+		#print(time.time()-begin)
+		return score
+
+
 class RandomAgent(Agent):
 
-	def __init__(self):
-		return
+	def __init__(self, player):
+		super(RandomAgent, self).__init__(player)
 
 	def getAction(self, gameState):
-		legalActions = gameState.getLegalActions()
-		actionIndex = np.random.choice(range(len(legalActions)))
-		action = legalActions[actionIndex]
+		action = random.choice(gameState.getLegalActions())
 		return action
 
+class BetterRandomAgent(Agent):
+
+	def __init__(self, player):
+		super(BetterRandomAgent, self).__init__(player)
+
+	def getAction(self, gameState):
+		#self.evaluateActions(gameState)
+		action = random.choice(gameState.getGoodActions())
+		return action		
+		#capturedPairs = gameState.getAllCapturedPairs()
+		#print(capturedPairs)
+
+		#actions = [action for action in goodActions if not gameState.isCaptured(action)]
+
+		'''
+		lastAction = gameState.lastAction
+		print('My: ', self.capturedZone)
+		counterAction = self.isCaptured(lastAction)
+		self.capturedZone = gameState.getCapturedZone()
+		if counterAction:
+			return counterAction
+		actions = [action for action in goodActions if not self.isCaptured(action)]
+		#print(actions)
+		'''
+		#return random.choice(goodActions)
 
 class HumanAgent(Agent):
 	
-	def __init__(self):
-		return
+	def __init__(self, player):
+		super(HumanAgent, self).__init__(player)
+		self.betterRandomAgent = BetterRandomAgent(player)
 
 	def getAction(self, gameState):
+		#gameState.analysis()
+		print(self.evaluationFunction(gameState))
 		legalActions = gameState.getLegalActions()
 		while True:
-			yourMoveStr = input('Your move: ')
+			#print(gameState.getCapturedZone(1))
+			yourMoveStr = input('Your(' + self.getName() + ') move: ')
+			if yourMoveStr == 'random' or yourMoveStr == 'r':
+				return self.betterRandomAgent.getAction(gameState)
 			tokens = yourMoveStr.split(',')
 			if len(tokens) != 2:
 				print('Illegal input!')
@@ -47,7 +103,32 @@ class HumanAgent(Agent):
 		return action
 
 
-class UCTNode(object):
+class MinimaxSearchAgent(Agent):
+
+	def __init__(self, player):
+		super(MinimaxSearchAgent, self).__init__(player)
+	
+	def getAction(self, gameState):
+		return max( [action for action in gameState.getLegalActions()], 
+			key=lambda x: self.evaluationFunction(gameState.getNextState(x)) )
+
+
+class MyAgent(Agent):
+
+	def __init__(self, player):
+		super(MyAgent, self).__init__(player)
+		self.randomAgent = RandomAgent(player)
+		self.betterRandomAgent = BetterRandomAgent(player)
+		self.monteCarloSearchAgent = MonteCarloSearchAgent(player)
+
+	def getAction(self, gameState):
+		if gameState.getAlreadyPlayedActionsNum() < 10:
+			return self.randomAgent.getAction(gameState)
+		else:
+			return self.monteCarloSearchAgent.getAction(gameState)
+
+
+class MonteCarloNode(object):
 	__slots__ = ('value', 'visits')
 
 	def __init__(self, value=0.0, visits=0):
@@ -55,72 +136,55 @@ class UCTNode(object):
 		self.visits = visits
 
 	def __str__(self):
-		return('value: ' + str(self.value) + '\nvisits: ' + str(self.visits) + '\n')
+		return('{ value: ' + str(self.value) + ', visits: ' + str(self.visits) + '}')
 
+	def update(self, reward):
+		self.visits += 1
+		self.value += reward
 
-class UCTAgent(Agent):
+	def getScore(self):
+		return self.value / (self.visits or 1)
 
-	def __init__(self, **kwargs):
-		self.nodes = {}
+class MonteCarloSearchAgent(Agent):
 
+	def __init__(self, player, **kwargs):
+		super(MonteCarloSearchAgent, self).__init__(player)
 		self.simulationTimeLimit = float(kwargs.get('time', 30))
-		self.simulationActionsLimit = int(kwargs.get('max_actions', 1000))
-
+		# self.simulationActionsLimit = int(kwargs.get('max_actions', 1000))
 		# Exploration constant, increase for more exploratory actions,
 		# decrease to prefer actions with known higher win rates.
 		self.C = float(kwargs.get('C', 1.4))
+		self.tree = {} #defaultdict(MonteCarloNode)
 
 	def getAction(self, gameState):
 		# Causes the AI to calculate the best action from the
 		# current game state and return it.
 
+		assert not gameState.isGoalState()
+
 		self.maxDepth = 0
-		#self.data = {}
-		self.nodes.clear()
-
-		legalActions = gameState.getLegalActions()
-
-		# Bail out early if there is no real choice to be made.
-		if len(legalActions) == 0:
-			return None
-		if len(legalActions) >= 25:
-			return random.choice(legalActions)
+		self.tree.clear()
 
 		simulationCount = 0
 		beginTime = time.time()
 		while time.time() - beginTime < self.simulationTimeLimit:
-			self.runSimulation(gameState)
 			simulationCount += 1
+			print('Simulation', simulationCount, end=' ')
+			reward = self.runSimulation(gameState)
+			print(', reward:', reward)
 
-		print('Simulation counts: ', simulationCount)
-		print('Search max depth: ', self.maxDepth)
-		print('Time elapsed: ', time.time() - beginTime)
-		#print(self.nodes.keys()[1])
+		print('Simulation counts:', simulationCount)
+		print('Search max depth:', self.maxDepth)
+		print('Time elapsed:', time.time() - beginTime)
 
 		player = gameState.nextPlayer
-		bestAction = None
-		bestScore = -9999
-		for action in legalActions:
-			nextState = gameState.getNextState(action, player)
-			if (player, nextState) not in self.nodes:
-				continue
-			value = self.nodes[ (player, nextState) ].value
-			visits = self.nodes[ (player, nextState) ].visits
-			score = value/visits
-			if score > bestScore:
-				bestScore = score
-				bestAction = action
+
+		bestAction = max( [ action for action in gameState.getGoodActions() if gameState.getNextState(action) in self.tree ], 
+				key=lambda x: self.tree[gameState.getNextState(x)].getScore())
+
+		print('Average reward:', self.tree[gameState.getNextState(bestAction)].getScore())
 
 		return bestAction
-
-		# Store and display the stats for each possible action.
-		#self.data['actions'] = self.calculate_action_values(state, player, legal)
-		#for m in self.data['actions']:
-		#	print self.action_template.format(**m)
-
-		# Pick the action with the highest average value.
-		#return self.board.unpack_action(self.data['actions'][0]['action'])
-
 
 	def runSimulation(self, gameState):
 
@@ -130,72 +194,46 @@ class UCTAgent(Agent):
 		# A bit of an optimization here, so we have a local
 		# variable lookup instead of an attribute access each loop.
 		
-		nodes = self.nodes
-
 		explored = set()
 		currentState = gameState.copy()
+		player = currentState.nextPlayer
 
 		expand = True
-		for t in range(self.simulationActionsLimit):
-			#print(t)
-			currentPlayer = currentState.nextPlayer
-			legalActions = currentState.getLegalActions()
-			nextStates = [currentState.getNextState(action) for action in legalActions]
+		depth = 0
 
-			if all( (currentPlayer, nextState) in nodes for nextState in nextStates):
+		while True:
+			depth += 1
+			nextStates = [currentState.getNextState(action) for action in currentState.getGoodActions()]
+
+			if all( nextState in self.tree for nextState in nextStates):
 				# UCB1
-				logSum = log( sum(nodes[ (currentPlayer, nextState) ].visits for nextState in nextStates) or 1 )
-				value, currentState = max(
-					(( nodes[ (currentPlayer, nextState) ].value / (nodes[ (currentPlayer, nextState) ].visits or 1) ) +
-					self.C * sqrt( logSum / (nodes[ (currentPlayer, nextState) ].visits or 1)), nextState )
-					for nextState in nextStates
-				)
+				logSum = log( sum( self.tree[ nextState ].visits for nextState in nextStates ) or 1 )
+				currentState = max( [ nextState for nextState in nextStates], 
+					key=lambda x: self.tree[x].getScore() + self.C * sqrt(logSum / (self.tree[x].visits or 1)) )
 			else:
 				currentState = random.choice(nextStates)
 
-			if expand and (currentPlayer, currentState) not in nodes:
+			if expand and currentState not in self.tree:
 				expand = False
-				nodes[ (currentPlayer, currentState) ] = UCTNode()
-				if t > self.maxDepth:
-					self.maxDepth = t
-
-			explored.add((currentPlayer, currentState))
-			#print(state)
+				self.tree[ currentState ] = MonteCarloNode()
+				self.maxDepth = max(depth, self.maxDepth)
+			explored.add(currentState)
 			if currentState.isGoalState():
 				break
+
 		#print(currentState)
 		# Back-propagation
-		for player, state in explored:
-			if (player, state) not in nodes:
+		reward = currentState.getReward(player)
+		for state in explored:
+			if state not in self.tree:
 				continue
-			S = nodes[ (player, state) ]
-			#print(S)
-			S.visits += 1
-			#print(state.getReward(player))
-			S.value += currentState.getReward(player)
-			#print(self.nodes[(player, state)])
+			self.tree[state].update(reward)
+		return reward
 
 
-def NoDeadCellRandomAgent(gameState):
-	legalActions = gameState.getLegalActions()
-	goodActions = [a for a in legalActions if not gameState.isDeadCell(a)]
-	actionIndex = np.random.choice(range(len(goodActions)))
-	action = goodActions[actionIndex]
-	return action
 
-class BetterRandomAgent(Agent):
+		
 
-	def __init__(self):
-		return
-
-	def getAction(self, gameState):
-		action = gameState.mustPlayAction()
-		if action != None:
-			return action
-		legalActions = gameState.getLegalActions()
-		goodActions = [a for a in legalActions if not gameState.isDeadCell(a)]
-		action = random.choice(goodActions)
-		return action
 
 
 
@@ -274,8 +312,6 @@ def ExpectimaxAgent(gameState, max_depth=1):
 	#print bestScore, bestAction
 	return bestAction
 
-def MonteCarloTreeSearchAgent(gameState):
-	from mcts import UCTValues
-	uct = UCTValues(gameState)
-	uct.history.append(gameState)
-	return uct.get_action()
+
+
+

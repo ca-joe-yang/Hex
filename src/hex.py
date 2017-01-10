@@ -1,11 +1,12 @@
 import sys
 import numpy as np
+import time
 
-'''
-NOTHING = 0
-BLACK = 1
-WHITE = 2
-'''
+class HexPlayer():
+	BLACK = 1
+	WHITE = 2
+
+	EACH_PLAYER = [BLACK, WHITE]
 
 class HexEnv():
 
@@ -39,10 +40,13 @@ class HexEnv():
 		while not self.gameState.isGoalState():
 			gameState = self.gameState
 			player = gameState.nextPlayer
-			action = self.playerAgent[player].getAction(gameState)
+			agent = self.playerAgent[player]
+			action = agent.getAction(gameState)
+	
 			self.step(action, player)
 
 			if self.verbose:
+				print(agent.getName(), 'move:', action)
 				self.render()
 
 	def getWinner(self):
@@ -57,6 +61,9 @@ class HexState:
 
 	BOARD_SIZE = None
 
+	FIRST_PLAYER = 1  # Black
+	SECOND_PLAYER = 2 # White
+
 	NEIGHBORNG_DIRECTION = [ 
 		(-1, 0), 
 		(-1, 1),
@@ -68,10 +75,39 @@ class HexState:
 
 	DEAD_CELL_PATTERN = [ 
 		[1, 1, 1, 1, None, None],
+		[1, 1, 1, None, None, 1],
+		[1, 1, None, None, 1, 1],
+		[1, None, None, 1, 1, 1],
+		[None, None, 1, 1, 1, 1],
+		[None, 1, 1, 1, 1, None],
+		
 		[2, 2, 2, 2, None, None],
+		[2, 2, 2, None, None, 2],
+		[2, 2, None, None, 2, 2],
+		[2, None, None, 2, 2, 2],
+		[None, None, 2, 2, 2, 2],
+		[None, 2, 2, 2, 2, None],
+		
 		[1, 1, None, 2, 2, None],
+		[1, None, 2, 2, None, 1],
+		[None, 2, 2, None, 1, 1],
+		[2, 2, None, 1, 1, None],
+		[2, None, 1, 1, None, 2],
+		[None, 1, 1, None, 2, 2],
+		
 		[1, None, 2, 2, 2, None],
+		[None, 2, 2, 2, None, 1],
+		[2, 2, 2, None, 1, None],
+		[2, 2, None, 1, None, 2],
+		[2, None, 1, None, 2, 2],
+		[None, 1, None, 2, 2, 2],
+
 		[2, None, 1, 1, 1, None],
+		[None, 1, 1, 1, None, 2],
+		[1, 1, 1, None, 2, None],
+		[1, 1, None, 2, None, 1],
+		[1, None, 2, None, 1, 1],
+		[None, 2, None, 1, 1, 1],
 	]
 
 	START_CELL = {
@@ -95,6 +131,24 @@ class HexState:
 			self.board[(i+1, HexState.BOARD_SIZE+1)] = 1
 			self.board[(HexState.BOARD_SIZE+1, i+1)] = 2
 		self.nextPlayer = 1
+		self.winner = None
+		self.lastAction = None
+		self.dead = set()
+		self.analysisResult = {
+			'check': {
+				1: [],
+				2: []
+			},
+			'dead': {
+				1: [],
+				2: [],
+				0: []
+			},
+			'captured': {
+				1: [],
+				2: []
+			}
+		}
 
 	def copy(self):
 		import copy
@@ -173,13 +227,24 @@ class HexState:
 
 		return ('\n'.join(lines))
 
+	def getAlreadyPlayedActionsNum(self):
+		return HexState.BOARD_SIZE ** 2 - len(self.getLegalActions())
+
 	def getAllCells(self, player=None):
-		if player == False:
+		if player != None:
 			return [ c for c in self.board.keys() if self.board[c] == player]
 		return self.board.keys()
 
 	def getLegalActions(self):
 		return self.getAllCells(0)
+
+	def getGoodActions(self):
+		goodActions = [action for action in self.getLegalActions()
+			if not self.isDead(action)]
+		if len(goodActions) > 0:
+			return goodActions
+
+		return self.getLegalActions()
 
 	def isLegalAction(self, action, player, prediction=False):
 		if not prediction and player != self.nextPlayer:
@@ -193,6 +258,7 @@ class HexState:
 		assert self.isLegalAction(action, player, prediction)
 		nextState.board[action] = player
 		nextState.nextPlayer = 3-player
+		nextState.lastAction = action
 		return nextState
 
 	def getNeighbors(self, center, player=None, checkList=None):
@@ -207,7 +273,7 @@ class HexState:
 		return neighbors
 
 	def getLegalNeighbors(self, center):
-		return getNeighbors(center, 0)
+		return self.getNeighbors(center, 0)
 
 
 	def getNeighborsPattern(self, center):
@@ -223,25 +289,28 @@ class HexState:
 				neighborsPattern.append(self.board[c])
 		return neighborsPattern
 
-	def isDeadCell(self, coordinate):
+	def isDead(self, coordinate):
+		if  coordinate[0] == 0 or coordinate[1] == 0 \
+			or coordinate[0] == HexState.BOARD_SIZE+1 or coordinate[1] == HexState.BOARD_SIZE+1:
+			return False
 		neighborsPattern = self.getNeighborsPattern(coordinate)
+		if coordinate in self.dead:
+			return True
 
-		for p in self.DEAD_CELL_PATTERN:
-			pattern = p[:]
-			for r in range(6):
-				x = pattern.pop()
-				pattern.insert(0, x)
-				#print(coordinate, neighborsState, pattern)
-				if isPatternsMatched(neighborsPattern, pattern):
-					return True
+		for pattern in self.DEAD_CELL_PATTERN:
+			if isPatternsMatched(neighborsPattern, pattern):
+				self.dead.add(coordinate)
+				return True
 		return False
 
 	def getWinner(self):
+
 		for player in [1,2]:
 			if self.isWinner(player):
 				return player
 		legalActions = self.getLegalActions()
 		if len(legalActions) == 0:
+			self.winner = 0
 			return 0
 		return -1
 
@@ -256,6 +325,8 @@ class HexState:
 			return 0
 
 	def isWinner(self, player):
+		if self.winner != None:
+			return self.winner == player
 		frontier = set()
 		explored = set()
 		frontier.add(HexState.START_CELL[player])
@@ -263,6 +334,7 @@ class HexState:
 		while len(frontier) != 0:
 			cell = frontier.pop()
 			if cell == HexState.END_CELL[player]:
+				self.winner = player
 				return True
 			for neighbor in self.getNeighbors(cell, player):
 				if neighbor not in explored:
@@ -275,21 +347,98 @@ class HexState:
 			return True
 		return False
 
-	def mustPlayAction(self):
+	def getMustPlayActions(self):
 		legalActions = self.getLegalActions()
 		player = self.nextPlayer
 		opponent = 3-player
-		for action in legalActions:
-			nextState = self.getNextState(action, player)
-			if nextState.getWinner() == player:
-				return action
-		for action in legalActions:
-			nextState = self.getNextState(action, opponent, True)
-			if nextState.getWinner() == opponent:
-				return action
-		return None
+		
+		# Winning Move
+		winningActions = [action for action in legalActions 
+			if self.getNextState(action, player).getWinner() == player]
+		if len(winningActions) > 0:
+			return winningActions
+		
+		# Not losing move
+		notLosingActions = [action for action in legalActions
+			if self.getNextState(action, opponent, True).getWinner() == opponent]
+		if len(notLosingActions) > 0:
+			return notLosingActions
+		
+		return []
 
+	def isVulnerableToPlayer(self, center, player):
+		if self.isDead(center):
+			return False
+		for neighbor in self.getLegalNeighbors(center):
+			if self.getNextState(neighbor, player, True).isDead(center):
+				return True
+		return False
 
+	def isCapturedByPlayer(self, center, player):
+		for neighbor in self.getLegalNeighbors(center):
+			if self.getNextState(neighbor, player, True).isDead(center) \
+				and self.getNextState(center, player, True).isDead(neighbor):
+				return True
+		return False
+
+	def analysis(self):
+		begin = time.time()
+		actionSet = set(self.getLegalActions())
+
+		#print(time.time()-begin)
+		blackWinningActions = set([action for action in actionSet
+			if self.getNextState(action, HexPlayer.BLACK, True).getWinner() == HexPlayer.BLACK])
+		actionSet -= blackWinningActions
+		#print(time.time()-begin)
+		whiteWinningActions = set([action for action in actionSet
+			if self.getNextState(action, HexPlayer.WHITE, True).getWinner() == HexPlayer.WHITE])
+		actionSet -= whiteWinningActions
+
+		#print(time.time()-begin)
+		blackDeadCells = set([cell for cell in self.getAllCells(HexPlayer.BLACK) if self.isDead(cell)])
+		#print(time.time()-begin)
+		whiteDeadCells = set([cell for cell in self.getAllCells(HexPlayer.WHITE) if self.isDead(cell)])
+		#print(time.time()-begin)
+		deadActions = set([action for action in actionSet if self.isDead(action)])
+		actionSet -= deadActions
+		#print(time.time()-begin)
+		blackCapturedActions = set([action for action in actionSet if self.isCapturedByPlayer(action, HexPlayer.BLACK)])
+		actionSet -= blackCapturedActions
+		#print(time.time()-begin)
+		whiteCapturedActions = set([action for action in actionSet if self.isCapturedByPlayer(action, HexPlayer.WHITE)])
+		actionSet -= whiteCapturedActions
+
+		#blackVulnerableActions = [action for action in actionSet if self.isVulnerableToPlayer(action, HexPlayer.BLACK)]
+		#whiteVulnerableActions = [action for action in actionSet if self.isVulnerableToPlayer(action, HexPlayer.WHITE)]
+
+		result = {
+			'check': {
+				1: blackWinningActions,
+				2: whiteWinningActions
+			},
+			'dead': {
+				1: blackDeadCells,
+				2: whiteDeadCells,
+				0: deadActions
+			},
+			'captured': {
+				1: blackCapturedActions,
+				2: whiteCapturedActions
+			}
+		}
+		return result
+		'''
+		print(result)
+		print('Black Winning:', blackWinningActions)
+		print('White Winning:', whiteWinningActions)
+		print('Black Dead:', blackDeadCells)
+		print('White Dead:', whiteDeadCells)
+		print('Dead Actions:', deadActions)
+		print('Black Captured: ', blackCapturedActions)
+		print('White Captured: ', whiteCapturedActions)
+		'''
+		#print('Vulerable to Black: ', blackVulnerableActions)
+		#print('Vulerable to White: ', whiteVulnerableActions)
 
 def isNeighbor(coordinate1, coordinate2):
 	x1, y1 = coordinate1
@@ -308,76 +457,5 @@ def isPatternsMatched(pattern, targetPattern):
 		if p1 != p2:
 			return False
 	return True
-
-
-class HexMCTS(HexState):
-    def display(self, state, action):
-        board = str(state)
-        board += "\nPlayed: " + action
-        board += "\nPlayer " + state.nextPlayer + " to move."
-        return board
-
-    def pack_state(self, data):
-        state = HexMCTS()
-        board = {}
-        for cell in data[0]:
-            board[cell[0]] = cell[1]
-        state.board = board
-        state.nextPlayer = data[1]
-        return state
-
-    def unpack_state(self, state):
-        board = []
-        for (x, y), value in state.board.iteritems():
-            board.append(((x, y), value))
-        return (tuple(board), state.nextPlayer)
-
-    def pack_action(self, action):
-        from ast import literal_eval as make_tuple
-        return make_tuple(action)
-
-    def unpack_action(self, action):
-        return str(action)
-
-    def legal_actions(self, history):
-        try:
-            return history[-1].getLegalActions()
-        except AttributeError:
-            return self.pack_state(history[-1]).getLegalActions()
-
-    def next_state(self, state, action):
-        try:
-            return self.unpack_state(state.getNextState(action, state.nextPlayer))
-        except AttributeError:
-            state = self.pack_state(state)
-            return self.unpack_state(state.getNextState(action, state.nextPlayer))
-    
-    def current_player(self, state):
-        try:
-            return state.nextPlayer
-        except AttributeError:
-            return state[-1]
-        
-    def is_ended(self, history):
-        return self.pack_state(history[-1]).isGoalState()
-
-    def win_values(self, history):
-        winner = self.pack_state(history[-1]).getWinner()
-        if winner == 3:
-            return {1: 0.5, 2: 0.5}
-        if not winner:
-            return
-
-        return {winner: 1, 3 - winner: 0}
-
-    points_values = win_values
-    
-    def winner_message(self, winners):
-        winners = sorted((v, k) for k, v in winners.iteritems())
-        value, winner = winners[-1]
-        if value == 0.5:
-            return "Stalemate."
-        return "Winner: Player {0}.".format(winner)
-
 
 
