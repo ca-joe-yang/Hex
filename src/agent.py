@@ -23,22 +23,24 @@ class Agent:
 		elif self.player == 2:
 			return 'WHITE'
 
-	def evaluationFunction(self, gameState):
-		begin = time.time()
-		analysis = gameState.analysis()
-		player = self.player
-		opponent = self.opponent
-		#print(time.time()-begin)
+def evaluationFunction(gameState, player):
+	analysis = gameState.analysis()
+	opponent = 3-player
+	#print(analysis['shortest'])
 
-		score = 100 * gameState.getReward(player)
-		score += 50 * len(analysis['check'][player])
-		score -= 49 * len(analysis['check'][opponent])
-		score -= 5 * len(analysis['dead'][player])
-		score += 5 * len(analysis['dead'][opponent])
-		score += 5 * len(analysis['captured'][player])
-		score -= 5 * len(analysis['captured'][opponent])
-		#print(time.time()-begin)
-		return score
+	score = 1000 * gameState.getReward(player)
+	score += 500 * len(analysis['winning'][player])
+	score -= 500 * len(analysis['winning'][opponent])
+	score -= 100 * analysis['shortest'][player]
+	score += 100 * analysis['shortest'][opponent]
+	score -= 5 * len(analysis['dead'][player])
+	score += 5 * len(analysis['dead'][opponent])
+	score += 5 * len(analysis['captured'][player])
+	score -= 5 * len(analysis['captured'][opponent])
+	score += 10 * analysis['bridges'][player]
+	score -= 10 * analysis['bridges'][opponent]
+	#print(gameState, score)
+	return score
 
 
 class RandomAgent(Agent):
@@ -83,8 +85,8 @@ class HumanAgent(Agent):
 		self.betterRandomAgent = BetterRandomAgent(player)
 
 	def getAction(self, gameState):
-		#gameState.analysis()
-		print(self.evaluationFunction(gameState))
+		gameState.analysis()
+		print(evaluationFunction(gameState, self.player))
 		legalActions = gameState.getLegalActions()
 		while True:
 			#print(gameState.getCapturedZone(1))
@@ -103,29 +105,100 @@ class HumanAgent(Agent):
 		return action
 
 
-class MinimaxSearchAgent(Agent):
+class AlphaBetaSearchAgent(Agent):
 
 	def __init__(self, player):
-		super(MinimaxSearchAgent, self).__init__(player)
+		super(AlphaBetaSearchAgent, self).__init__(player)
+		self.searchCount = 0
+
+	def alphaBetaSearch(self, gameState, player, depth, alpha=-99999, beta=99999):
+		#print(alpha, beta)
+		self.searchCount += 1
+		print(self.searchCount)
+		if depth == 0 or gameState.isGoalState():
+			return evaluationFunction(gameState, self.player), []
+			
+		actions = gameState.getGoodActions()
+		#print(alpha, beta)
+
+		bestAction = None
+		if player == self.player:
+			bestScore = -999999
+			for action in actions:
+				nextState = gameState.getNextState(action)
+				score, path = self.alphaBetaSearch(nextState, self.opponent, depth, alpha, beta)
+				#print(player, action, score)
+				if score > bestScore:
+					bestScore = score
+					bestAction = action
+			
+				if bestScore > beta:
+					path.append(bestAction)
+					return bestScore, path
+				#print(alpha, beta, bestScore)
+				alpha = max(alpha, bestScore)
+
+		elif player == self.opponent:
+			bestScore = 999999
+			for action in actions:
+				nextState = gameState.getNextState(action)
+				score, path = self.alphaBetaSearch(nextState, self.player, depth-1, alpha, beta)
+				#print(player, action, score)
+				if score < bestScore:
+					bestScore = score
+					bestAction = action
+				if bestScore < alpha:
+					path.append(bestAction)
+					return bestScore, path
+				beta = min(beta, bestScore)
+			
+		path.append(bestAction)
+		return bestScore, path.copy()	
+
 	
-	def getAction(self, gameState):
-		return max( [action for action in gameState.getLegalActions()], 
-			key=lambda x: self.evaluationFunction(gameState.getNextState(x)) )
+	def getAction(self, gameState, maxDepth=2):
+		player = self.player
+		if gameState.getAlreadyPlayedActionsNum() < 4:
+			maxDepth = 1
+		
+		self.searchCount = 0
+		bestScore, bestPath = self.alphaBetaSearch(gameState, self.player, maxDepth)
+		#print(self.searchCount)
+		print(bestScore, bestPath)
+
+		return bestPath[0]
 
 
-class MyAgent(Agent):
+class MyAgent1(Agent):
 
 	def __init__(self, player):
-		super(MyAgent, self).__init__(player)
+		super(MyAgent1, self).__init__(player)
 		self.randomAgent = RandomAgent(player)
 		self.betterRandomAgent = BetterRandomAgent(player)
+		self.minimaxSearchAgent = MinimaxSearchAgent(player)
 		self.monteCarloSearchAgent = MonteCarloSearchAgent(player)
 
 	def getAction(self, gameState):
 		if gameState.getAlreadyPlayedActionsNum() < 10:
-			return self.randomAgent.getAction(gameState)
+			return self.betterRandomAgent.getAction(gameState)
+		else:
+			return self.minimaxSearchAgent.getAction(gameState)
+
+class MyAgent2(Agent):
+
+	def __init__(self, player):
+		super(MyAgent2, self).__init__(player)
+		self.randomAgent = RandomAgent(player)
+		self.betterRandomAgent = BetterRandomAgent(player)
+		self.minimaxSearchAgent = AlphaBetaSearchAgent(player)
+		self.monteCarloSearchAgent = MonteCarloSearchAgent(player)
+
+	def getAction(self, gameState):
+		if gameState.getAlreadyPlayedActionsNum() < 10:
+			return self.betterRandomAgent.getAction(gameState)
 		else:
 			return self.monteCarloSearchAgent.getAction(gameState)
+
 
 
 class MonteCarloNode(object):
@@ -203,12 +276,13 @@ class MonteCarloSearchAgent(Agent):
 
 		while True:
 			depth += 1
+			begin = time.time()
 			nextStates = [currentState.getNextState(action) for action in currentState.getGoodActions()]
-
+			#print(time.time()-begin)
 			if all( nextState in self.tree for nextState in nextStates):
 				# UCB1
 				logSum = log( sum( self.tree[ nextState ].visits for nextState in nextStates ) or 1 )
-				currentState = max( [ nextState for nextState in nextStates], 
+				currentState = max( [ nextState for nextState in nextStates ], 
 					key=lambda x: self.tree[x].getScore() + self.C * sqrt(logSum / (self.tree[x].visits or 1)) )
 			else:
 				currentState = random.choice(nextStates)
@@ -249,68 +323,6 @@ class MonteCarloSearchAgent(Agent):
 
 
 
-
-
-
-
-
-
-
-def OnlyAttackAgent(gameState):
-	action = 0
-
-
-	return action
-
-def evaluationFunction(gameState):
-	reward = HexEnv.game_finished(gameState)
-	return reward
-
-def ExpectimaxAgent(gameState, max_depth=1):
-
-	legal_actions = HexEnv.get_possible_actions(gameState)	
-	if len(legal_actions) == 0:
-		return 'resign'
-	
-	INT_MAX = 999999
-	PLAYER = 0
-	
-	def getExpectimaxScoreAction(gameState, agentIndex, depth):
-		legal_actions = HexEnv.get_possible_actions(gameState)	
-		reward = HexEnv.game_finished(gameState)
-		if depth == 0 or reward != 0:
-			return reward, 0
-
-		bestActions = []
-		if agentIndex == PLAYER:
-			bestScore = -INT_MAX
-			for act in legal_actions:
-				sucState = gameState.copy()
-				HexEnv.make_move(sucState, act, agentIndex)
-				score, a = getExpectimaxScoreAction(sucState, 1-PLAYER, depth)
-				if score > bestScore:
-					bestScore = score
-					bestActions = []
-				if score == bestScore:
-					bestActions.append(act)
-		
-		elif agentIndex == 1-PLAYER:
-			bestScore = 0.0
-			for act in legal_actions:
-				sucState = gameState.copy()
-				HexEnv.make_move(sucState, act, agentIndex)
-				score, a = getExpectimaxScoreAction(sucState, PLAYER, depth-1)
-				bestScore += float(score)
-			bestScore /= float(len(legal_actions))
-		
-		return bestScore, bestActions
-
-	bestScore, bestActions = getExpectimaxScoreAction(gameState, PLAYER, max_depth)
-		
-	bestAction = np.random.choice(bestActions)
-	#bestAction = bestActions[0]
-	#print bestScore, bestAction
-	return bestAction
 
 
 

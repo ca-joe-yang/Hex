@@ -1,6 +1,8 @@
 import sys
 import numpy as np
 import time
+import itertools
+import networkx as nx
 
 class HexPlayer():
 	BLACK = 1
@@ -11,24 +13,35 @@ class HexPlayer():
 class HexEnv():
 
 	def __init__(self, boardSize, verbose=True):
-		self.setHexStateParameter(boardSize)
-		self.reset()
+		#self.setHexStateParameter(boardSize)
+		self.reset(boardSize)
 		self.verbose = verbose
 		self.playerAgent = { 1: None, 2: None }
 
 	def step(self, action, player):
-		self.gameState = self.gameState.getNextState(action, player)
+		self.gameState = self.gameState.getNextState(action, player, False, False)
 
-	def setHexStateParameter(self, boardSize):
-		HexState.BOARD_SIZE = boardSize
-		HexState.END_CELL = {
-			1: (1, boardSize+1),
-			2: (boardSize+1, 1)
+	def _setHexStateParameter(self, boardSize):
+		N = boardSize
+		HexState.BOARD_SIZE = N
+		HexState.TARGET_CELL = {
+			HexPlayer.BLACK: [(1, 0), (1, N+1)],
+			HexPlayer.WHITE: [(0, 1), (N+1, 1)]
 		}
+		for i in range(N):
+			HexState.VERTEX_MAPPING[(i+1, 0)] = 0
+			HexState.VERTEX_MAPPING[(i+1, N+1)] = 1
+			HexState.VERTEX_MAPPING[(0, i+1)] = 2
+			HexState.VERTEX_MAPPING[(N+1, i+1)] = 3
+
+		for x in range(N):
+			for y in range(N):
+				HexState.VERTEX_MAPPING[(x+1,y+1)] = 5*y + x + 4
 
 	def reset(self, boardSize=None):
 		if boardSize != None:
-			self.setHexStateParameter(boardSize)
+			self._setHexStateParameter(boardSize)
+		#del self.gameState
 		self.gameState = HexState()
 
 	def setPlayerAgent(self, player, agent):
@@ -60,6 +73,13 @@ class HexEnv():
 class HexState:
 
 	BOARD_SIZE = None
+
+	TARGET_CELL = {
+		HexPlayer.BLACK: [],
+		HexPlayer.WHITE: []
+	}
+
+	VERTEX_MAPPING = {}
 
 	FIRST_PLAYER = 1  # Black
 	SECOND_PLAYER = 2 # White
@@ -110,50 +130,121 @@ class HexState:
 		[None, 2, None, 1, 1, 1],
 	]
 
-	START_CELL = {
-		1: (1, 0),
-		2: (0, 1)
-	}
-	END_CELL = {
-		1: None,
-		2: None
-	}
-
 	def __init__(self):
 		assert HexState.BOARD_SIZE != None
+		N = HexState.BOARD_SIZE
 		self.board = {}
-		for x in range(HexState.BOARD_SIZE):
-			for y in range(HexState.BOARD_SIZE):
-				self.board[(x+1,y+1)] = 0
-		for i in range(HexState.BOARD_SIZE):
-			self.board[(i+1, 0)] = 1
-			self.board[(0, i+1)] = 2
-			self.board[(i+1, HexState.BOARD_SIZE+1)] = 1
-			self.board[(HexState.BOARD_SIZE+1, i+1)] = 2
+
+		for c in HexState.VERTEX_MAPPING:
+			self.board[c] = 0
+
+		for i in range(N):
+			self.board[(i+1, 0)] = HexPlayer.BLACK
+			self.board[(i+1, N+1)] = HexPlayer.BLACK
+			self.board[(0, i+1)] = HexPlayer.WHITE
+			self.board[(N+1, i+1)] = HexPlayer.WHITE
+		
 		self.nextPlayer = 1
 		self.winner = None
 		self.lastAction = None
 		self.dead = set()
-		self.analysisResult = {
-			'check': {
-				1: [],
-				2: []
-			},
-			'dead': {
-				1: [],
-				2: [],
-				0: []
-			},
-			'captured': {
-				1: [],
-				2: []
-			}
+		self.captured = {
+			HexPlayer.BLACK: set(),
+			HexPlayer.WHITE: set()
 		}
+		self.shannonGraphs = {
+			HexPlayer.BLACK: self._initShannonGraph(HexPlayer.BLACK),
+			HexPlayer.WHITE: self._initShannonGraph(HexPlayer.WHITE)
+		}
+
+	def _initShannonGraph(self, player):
+		N = HexState.BOARD_SIZE
+		graph = nx.Graph()
+		for x in range(N):
+			for y in range(N):
+				graph.add_node((x+1, y+1))
+		for node in graph.nodes():
+			for neighbor in HexState.getNeighbors(self.board, [node]):
+				if neighbor in graph.nodes():
+					graph.add_edge(node, neighbor)
+
+		if player == HexPlayer.BLACK:
+			node = (1, 0)
+			graph.add_node(node)
+			for i in range(N):
+				neighbor = (i+1, 1)
+				graph.add_edge(node, neighbor)
+			node = (1, N+1)
+			graph.add_node(node)
+			for i in range(N):
+				neighbor = (i+1, N)
+				graph.add_edge(node, neighbor)
+		elif player == HexPlayer.WHITE:
+			node = (0, 1)
+			graph.add_node(node)
+			for i in range(N):
+				neighbor = (1, i+1)
+				graph.add_edge(node, neighbor)
+			node = (N+1, 1)
+			graph.add_node(node)
+			for i in range(N):
+				neighbor = (N, i+1)
+				graph.add_edge(node, neighbor)
+			
+		return graph
+
+	def _updateShannonGraphs(self, action, player):
+		for p in HexPlayer.EACH_PLAYER:
+			graph = self.shannonGraphs[p]
+			#print(graph.nodes())
+			neighbors = graph.neighbors(action)
+			graph.remove_node(action)
+			if player == p:
+				for n1 in neighbors:
+					for n2 in neighbors:
+						if n1 != n2:
+							graph.add_edge(n1, n2)
+		#print(graph.number_of_nodes())
+		#print(graph.number_of_edges())
 
 	def copy(self):
 		import copy
 		state = copy.deepcopy(self)
 		return state
+
+	def _update(self, action, player, basic):
+
+		self.lastAction = action
+		self.board[action] = player
+		self.nextPlayer = 3-player
+		opponent = 3-player
+
+		if len(HexState.getNeighbors(self.board, [action], player)) >= 2:
+			explored = HexState.traverse(self.board, action, player)
+			if all( target in explored for target in HexState.TARGET_CELL[player]):
+				self.winner = player
+		elif len(self.getLegalActions()) == 0:
+			self.winner = 0
+
+		self._updateShannonGraphs(action, player)
+
+		if basic:
+			return
+
+		self._updateCaptured()
+		self._updateDead(action)
+
+	def _updateCaptured(self):
+		for p in HexPlayer.EACH_PLAYER:
+			zone = HexState.getNeighbors(self.board, self.getAllCells(p))
+			#del self.captured
+			self.captured[p] = set([ cell for cell in zone if HexState.checkIsCapturedByPlayer(self.board, cell, p)])
+
+	def _updateDead(self, action):
+		neighbors = HexState.getNeighbors(self.board, [action])
+		for n in neighbors:
+			if not self.isDead(n) and HexState.checkIsDead(self.board, n):
+				self.dead.add(n)
 
 	def __hash__(self):
 		hashkey = []
@@ -241,6 +332,7 @@ class HexState:
 	def getGoodActions(self):
 		goodActions = [action for action in self.getLegalActions()
 			if not self.isDead(action)]
+		#print(goodActions)
 		if len(goodActions) > 0:
 			return goodActions
 
@@ -251,121 +343,39 @@ class HexState:
 			return False
 		return action in self.getLegalActions()
 
-	def getNextState(self, action, player=None, prediction=False):
+	def getNextState(self, action, player=None, prediction=False, basic=True):
 		nextState = self.copy()
 		if player == None:
 			player = self.nextPlayer
 		assert self.isLegalAction(action, player, prediction)
-		nextState.board[action] = player
-		nextState.nextPlayer = 3-player
-		nextState.lastAction = action
+		nextState._update(action, player, basic)
 		return nextState
 
-	def getNeighbors(self, center, player=None, checkList=None):
-		neighbors = []
-		if checkList == None: checkList = self.getAllCells()
-		for d in HexState.NEIGHBORNG_DIRECTION:
-			c = (center[0]+d[0], center[1]+d[1])
-			if c not in checkList:
-				continue
-			if player == None or self.board[c] == player:
-				neighbors.append(c)
-		return neighbors
+	def isDead(self, cell):
+		return cell in self.dead
 
-	def getLegalNeighbors(self, center):
-		return self.getNeighbors(center, 0)
+	def isCapturedByPlayer(self, cell, player):
+		return cell in self.captured[player]
 
+	def isGoalState(self):
+		return self.winner != None
 
-	def getNeighborsPattern(self, center):
-		board = self.board
-		#allCells = self.getAllCells()
-
-		neighborsPattern = []
-		for dx, dy in HexState.NEIGHBORNG_DIRECTION:
-			c = (center[0]+dx, center[1]+dy)
-			if c not in self.board:
-				neighborsPattern.append(0)
-			else:	
-				neighborsPattern.append(self.board[c])
-		return neighborsPattern
-
-	def isDead(self, coordinate):
-		if  coordinate[0] == 0 or coordinate[1] == 0 \
-			or coordinate[0] == HexState.BOARD_SIZE+1 or coordinate[1] == HexState.BOARD_SIZE+1:
-			return False
-		neighborsPattern = self.getNeighborsPattern(coordinate)
-		if coordinate in self.dead:
-			return True
-
-		for pattern in self.DEAD_CELL_PATTERN:
-			if isPatternsMatched(neighborsPattern, pattern):
-				self.dead.add(coordinate)
-				return True
-		return False
+	def isWinner(self, player):
+		return self.winner == player
 
 	def getWinner(self):
-
-		for player in [1,2]:
-			if self.isWinner(player):
-				return player
-		legalActions = self.getLegalActions()
-		if len(legalActions) == 0:
-			self.winner = 0
-			return 0
-		return -1
+		return self.winner
 
 	def getReward(self, player):
-		winner = self.getWinner()
 		opponent = 3-player
-		if winner == player:
+		if self.winner == player:
 			return 1
-		elif winner == opponent:
+		elif self.winner == opponent:
 			return -1
 		else:
 			return 0
 
-	def isWinner(self, player):
-		if self.winner != None:
-			return self.winner == player
-		frontier = set()
-		explored = set()
-		frontier.add(HexState.START_CELL[player])
-
-		while len(frontier) != 0:
-			cell = frontier.pop()
-			if cell == HexState.END_CELL[player]:
-				self.winner = player
-				return True
-			for neighbor in self.getNeighbors(cell, player):
-				if neighbor not in explored:
-					frontier.add(neighbor)
-			explored.add(cell)
-		return False
-
-	def isGoalState(self):
-		if self.getWinner() != -1:
-			return True
-		return False
-
-	def getMustPlayActions(self):
-		legalActions = self.getLegalActions()
-		player = self.nextPlayer
-		opponent = 3-player
-		
-		# Winning Move
-		winningActions = [action for action in legalActions 
-			if self.getNextState(action, player).getWinner() == player]
-		if len(winningActions) > 0:
-			return winningActions
-		
-		# Not losing move
-		notLosingActions = [action for action in legalActions
-			if self.getNextState(action, opponent, True).getWinner() == opponent]
-		if len(notLosingActions) > 0:
-			return notLosingActions
-		
-		return []
-
+	'''
 	def isVulnerableToPlayer(self, center, player):
 		if self.isDead(center):
 			return False
@@ -373,46 +383,58 @@ class HexState:
 			if self.getNextState(neighbor, player, True).isDead(center):
 				return True
 		return False
+	'''
 
-	def isCapturedByPlayer(self, center, player):
-		for neighbor in self.getLegalNeighbors(center):
-			if self.getNextState(neighbor, player, True).isDead(center) \
-				and self.getNextState(center, player, True).isDead(neighbor):
-				return True
-		return False
+
+
+
+
+
 
 	def analysis(self):
+		N = HexState.BOARD_SIZE
 		begin = time.time()
-		actionSet = set(self.getLegalActions())
+		actionSet = set(self.getGoodActions())
 
-		#print(time.time()-begin)
-		blackWinningActions = set([action for action in actionSet
-			if self.getNextState(action, HexPlayer.BLACK, True).getWinner() == HexPlayer.BLACK])
-		actionSet -= blackWinningActions
-		#print(time.time()-begin)
-		whiteWinningActions = set([action for action in actionSet
-			if self.getNextState(action, HexPlayer.WHITE, True).getWinner() == HexPlayer.WHITE])
+		blackWinningActions = HexState.getWinningActions(self.board, HexPlayer.BLACK)
+		whiteWinningActions = HexState.getWinningActions(self.board, HexPlayer.WHITE)
+
 		actionSet -= whiteWinningActions
+		actionSet -= blackWinningActions
 
-		#print(time.time()-begin)
-		blackDeadCells = set([cell for cell in self.getAllCells(HexPlayer.BLACK) if self.isDead(cell)])
-		#print(time.time()-begin)
-		whiteDeadCells = set([cell for cell in self.getAllCells(HexPlayer.WHITE) if self.isDead(cell)])
-		#print(time.time()-begin)
-		deadActions = set([action for action in actionSet if self.isDead(action)])
+		blackCells = self.getAllCells(HexPlayer.BLACK)
+		whiteCells = self.getAllCells(HexPlayer.WHITE)
+		blackDeadCells = set( [cell for cell in self.dead if cell in blackCells] )
+		whiteDeadCells = set( [cell for cell in self.dead if cell in whiteCells] )
+		deadActions = set( [action for action in self.dead if action in actionSet] )
 		actionSet -= deadActions
 		#print(time.time()-begin)
-		blackCapturedActions = set([action for action in actionSet if self.isCapturedByPlayer(action, HexPlayer.BLACK)])
+		blackCapturedActions = set([action for action in HexState.getNeighbors(self.board, blackCells) if self.isCapturedByPlayer(action, HexPlayer.BLACK)])
 		actionSet -= blackCapturedActions
 		#print(time.time()-begin)
-		whiteCapturedActions = set([action for action in actionSet if self.isCapturedByPlayer(action, HexPlayer.WHITE)])
+		whiteCapturedActions = set([action for action in HexState.getNeighbors(self.board, whiteCells) if self.isCapturedByPlayer(action, HexPlayer.WHITE)])
 		actionSet -= whiteCapturedActions
+		#print(time.time()-begin)
 
 		#blackVulnerableActions = [action for action in actionSet if self.isVulnerableToPlayer(action, HexPlayer.BLACK)]
 		#whiteVulnerableActions = [action for action in actionSet if self.isVulnerableToPlayer(action, HexPlayer.WHITE)]
 
+		blackGraph = self.shannonGraphs[HexPlayer.BLACK]
+		blackShortestPath = nx.shortest_path_length(
+			blackGraph, 
+			source=(1, 0), 
+			target=(1, N+1),
+		)
+
+		whiteGraph = self.shannonGraphs[HexPlayer.WHITE]
+		whiteShortestPath = nx.shortest_path_length(
+			whiteGraph, 
+			source=(0, 1),
+			target=(N+1, 1),
+		)
+
 		result = {
-			'check': {
+			'winning': {
 				1: blackWinningActions,
 				2: whiteWinningActions
 			},
@@ -424,11 +446,19 @@ class HexState:
 			'captured': {
 				1: blackCapturedActions,
 				2: whiteCapturedActions
+			},
+			'bridges': {
+				HexPlayer.BLACK: HexState.getPlayerBridgesNum(self.board, HexPlayer.BLACK),
+				HexPlayer.WHITE: HexState.getPlayerBridgesNum(self.board, HexPlayer.WHITE) 
+			},
+			'shortest': {
+				HexPlayer.BLACK: blackShortestPath,
+				HexPlayer.WHITE: whiteShortestPath
 			}
 		}
-		return result
+
+		#print(result)
 		'''
-		print(result)
 		print('Black Winning:', blackWinningActions)
 		print('White Winning:', whiteWinningActions)
 		print('Black Dead:', blackDeadCells)
@@ -437,8 +467,105 @@ class HexState:
 		print('Black Captured: ', blackCapturedActions)
 		print('White Captured: ', whiteCapturedActions)
 		'''
+		return result
 		#print('Vulerable to Black: ', blackVulnerableActions)
 		#print('Vulerable to White: ', whiteVulnerableActions)
+	
+
+	@staticmethod
+	def checkIsCapturedByPlayer(board, center, player):
+		for neighbor in HexState.getNeighbors(board, [center], 0):
+			board1 = board.copy()
+			board1[neighbor] = player
+			board2 = board.copy()
+			board2[center] = player
+			if HexState.checkIsDead(board1, center) and HexState.checkIsDead(board2, neighbor):
+				return True
+		return False
+	
+	@staticmethod
+	def checkIsDead(board, center):
+		N = HexState.BOARD_SIZE
+		if center[0] == 0 or center[1] == 0 or center[0] == N+1 or center[1] == N+1:
+			return False
+
+		neighborsPattern = []
+		for dx, dy in HexState.NEIGHBORNG_DIRECTION:
+			c = (center[0]+dx, center[1]+dy)
+			if c not in board:
+				neighborsPattern.append(0)
+			else:	
+				neighborsPattern.append(board[c])
+
+		for pattern in HexState.DEAD_CELL_PATTERN:
+			if isPatternsMatched(neighborsPattern, pattern):
+				return True
+		return False
+
+	@staticmethod
+	def getNeighbors(board, actions, player=None, radius=1):
+		neighbors = set(actions)
+		for r in range(radius):
+			tmp = neighbors.copy()
+			for action in neighbors:
+				for d in HexState.NEIGHBORNG_DIRECTION:
+					c = (action[0]+d[0], action[1]+d[1])
+					if c not in board:
+						continue
+					if player == None or board[c] == player:
+						tmp.add(c)
+			neighbors |= tmp
+		for a in actions:
+			neighbors.remove(a)
+		return neighbors
+
+	@staticmethod
+	def traverse(board, action, player):
+		frontier = set()
+		explored = set()
+		frontier.add(action)
+
+		while len(frontier) != 0:
+			cell = frontier.pop()
+			for neighbor in HexState.getNeighbors(board, [cell], player):
+				if neighbor not in explored:
+					frontier.add(neighbor)
+			explored.add(cell)
+		return explored
+
+	@staticmethod
+	def getInfluenceZone(board, action, player):
+		explored = HexState.traverse(board, action, player)
+		return HexState.getNeighbors(board, explored, 0)
+	
+	@staticmethod
+	def getWinningActions(board, player):
+		zone1 = HexState.getInfluenceZone(board, HexState.TARGET_CELL[player][0], player)
+		zone2 = HexState.getInfluenceZone(board, HexState.TARGET_CELL[player][1], player)
+
+		return zone1 & zone2
+
+	@staticmethod
+	def getPlayerBridgesNum(board, player):
+		count = 0
+		for cell in board:
+			if board[cell] != player:
+				continue
+			cx, cy = cell
+			for i in range(6):
+				j = (i+1) % 6
+				dx1, dy1 = HexState.NEIGHBORNG_DIRECTION[i]
+				dx2, dy2 = HexState.NEIGHBORNG_DIRECTION[j]
+				river1 = (cx + dx1, cy + dy1)
+				river2 = (cx + dx2, cy + dy2)
+				bridge = (cx + dx1 + dx2, cy + dy1 + dy2)
+				if bridge not in board or board[bridge] != player:
+					continue
+				if river1 in board and board[river1] == 0 and river2 in board and board[river2] == 0:
+					count += 1
+		return int(count / 2)
+
+
 
 def isNeighbor(coordinate1, coordinate2):
 	x1, y1 = coordinate1

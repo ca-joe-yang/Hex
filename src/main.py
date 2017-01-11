@@ -4,10 +4,10 @@ from hex import HexEnv
 
 episodeNum = 5
 
-env = HexEnv(7, True)
+env = HexEnv(5, True)
 
-blackAgent = MyAgent(1)
-whiteAgent = BetterRandomAgent(2)
+blackAgent = AlphaBetaSearchAgent(1)
+whiteAgent = HumanAgent(2)
 env.setPlayerAgent(1, blackAgent)
 env.setPlayerAgent(2, whiteAgent)
 
