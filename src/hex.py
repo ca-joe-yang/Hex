@@ -3,6 +3,7 @@ import numpy as np
 import time
 import itertools
 import networkx as nx
+import copy
 
 class HexPlayer():
 	BLACK = 1
@@ -137,12 +138,19 @@ class HexState:
 		self.N = N
 		self.board = {}
 		self.legalActions = []
+		self.goodActions = []
+		self.actionHistory = {
+			HexPlayer.BLACK: frozenset(),
+			HexPlayer.WHITE: frozenset()
+		}
 
 		for x in range(N):
 			for y in range(N):
 				c = (x+1, y+1)
 				self.board[c] = 0
 				self.legalActions.append(c)
+				self.goodActions.append(c) 
+
 
 		for i in range(N):
 			self.board[(i+1, 0)] = HexPlayer.BLACK
@@ -215,8 +223,9 @@ class HexState:
 		#print(graph.number_of_edges())
 
 	def copy(self):
-		import copy
+		begin = time.time()
 		state = copy.deepcopy(self)
+		#print(time.time()-begin)
 		return state
 
 	def _update(self, action, player, basic):
@@ -224,6 +233,8 @@ class HexState:
 		begin = time.time()
 		self.lastAction = action
 		self.legalActions.remove(action)
+		self.goodActions.remove(action)
+		self.actionHistory[player] |= frozenset({player})
 		self.board[action] = player
 		self.nextPlayer = 3-player
 		opponent = 3-player
@@ -267,7 +278,10 @@ class HexState:
 		neighbors = HexState.getNeighbors(self.board, [action])
 		for n in neighbors:
 			if not self.isDead(n) and HexState.checkIsDead(self.board, n):
+				
 				self.dead.add(n)
+				if n in self.goodActions:
+					self.goodActions.remove(n)
 
 	def __hash__(self):
 		hashkey = []
@@ -355,7 +369,9 @@ class HexState:
 		return self.legalActions
 
 	def getGoodActions(self):
-		return self.getCells(player='legal', dead=False, captured=False)
+		return self.goodActions
+
+
 
 	def isLegalAction(self, action, player, prediction=False):
 		if not prediction and player != self.nextPlayer:
@@ -402,6 +418,9 @@ class HexState:
 		nextState._update(action, player, basic)
 		#print(time.time()-begin)
 		return nextState
+
+	def setToNextState(self, action, player):
+		self._update(action, player, False)
 
 	def getEndStateReward(self, actionPaths, player):
 		playerActions = actionPaths[0]
@@ -603,6 +622,44 @@ class HexState:
 				if river1 in board and board[river1] == 0 and river2 in board and board[river2] == 0:
 					count += 1
 		return int(count / 2)
+
+	@staticmethod
+	def getHashKeyFromBoard(board):
+		hashkey = []
+		for x in range(HexState.BOARD_SIZE):
+			for y in range(HexState.BOARD_SIZE):
+				hashkey.append(board[(x+1,y+1)])
+		return hash(tuple(hashkey))
+
+	'''
+	@staticmethod
+	def getNextBoard(board, action, player):
+		b = []
+		for x in range(HexState.BOARD_SIZE):
+			for y in range(HexState.BOARD_SIZE):
+				c = (x+1, y+1)
+				if c == action:
+					b.append(player)
+				else:
+					b.append(board[c])
+		#b[action] = player
+		return b
+	'''
+
+	@staticmethod
+	def getNextBoardHashKey(board, action, player):
+		hashkey = []
+		begin=time.time()
+		for x in range(HexState.BOARD_SIZE):
+			for y in range(HexState.BOARD_SIZE):
+				if (x+1, y+1) == action:
+					hashkey.append(player)
+				else:
+					hashkey.append(board[(x+1,y+1)])
+		#print(time.time()-begin)
+		return hash(tuple(hashkey))
+
+		#return HexState.getHashKeyFromBoard(HexState.getNextBoard(board, action, player))
 
 
 
