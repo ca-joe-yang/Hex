@@ -2,12 +2,16 @@ import numpy as np
 from agent import *
 from hex import HexEnv
 
-episodeNum = 5
+episodeNum = 1
 
-env = HexEnv(5, True)
+env = HexEnv(7, True)
 
 blackAgent = AlphaBetaSearchAgent(1)
+blackAgent = MonteCarloSearchAgent(1)
+#blackAgent = HumanAgent(1)
+#blackAgent = RandomAgent(1)
 whiteAgent = HumanAgent(2)
+#whiteAgent = BetterRandomAgent(2)
 env.setPlayerAgent(1, blackAgent)
 env.setPlayerAgent(2, whiteAgent)
 

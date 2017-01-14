@@ -10,6 +10,14 @@ class HexPlayer():
 
 	EACH_PLAYER = [BLACK, WHITE]
 
+	@staticmethod
+	def OPPONENT(player):
+		if player == BLACK:
+			return WHITE
+		elif player == WHITE:
+			return BLACK
+		return None
+
 class HexEnv():
 
 	def __init__(self, boardSize, verbose=True):
@@ -28,15 +36,6 @@ class HexEnv():
 			HexPlayer.BLACK: [(1, 0), (1, N+1)],
 			HexPlayer.WHITE: [(0, 1), (N+1, 1)]
 		}
-		for i in range(N):
-			HexState.VERTEX_MAPPING[(i+1, 0)] = 0
-			HexState.VERTEX_MAPPING[(i+1, N+1)] = 1
-			HexState.VERTEX_MAPPING[(0, i+1)] = 2
-			HexState.VERTEX_MAPPING[(N+1, i+1)] = 3
-
-		for x in range(N):
-			for y in range(N):
-				HexState.VERTEX_MAPPING[(x+1,y+1)] = 5*y + x + 4
 
 	def reset(self, boardSize=None):
 		if boardSize != None:
@@ -54,11 +53,13 @@ class HexEnv():
 			gameState = self.gameState
 			player = gameState.nextPlayer
 			agent = self.playerAgent[player]
+			begin = time.time()
 			action = agent.getAction(gameState)
 	
 			self.step(action, player)
 
 			if self.verbose:
+				print('Response Time: ', time.time()-begin)
 				print(agent.getName(), 'move:', action)
 				self.render()
 
@@ -133,10 +134,15 @@ class HexState:
 	def __init__(self):
 		assert HexState.BOARD_SIZE != None
 		N = HexState.BOARD_SIZE
+		self.N = N
 		self.board = {}
+		self.legalActions = []
 
-		for c in HexState.VERTEX_MAPPING:
-			self.board[c] = 0
+		for x in range(N):
+			for y in range(N):
+				c = (x+1, y+1)
+				self.board[c] = 0
+				self.legalActions.append(c)
 
 		for i in range(N):
 			self.board[(i+1, 0)] = HexPlayer.BLACK
@@ -156,6 +162,7 @@ class HexState:
 			HexPlayer.BLACK: self._initShannonGraph(HexPlayer.BLACK),
 			HexPlayer.WHITE: self._initShannonGraph(HexPlayer.WHITE)
 		}
+		#self.goodMoves = []
 
 	def _initShannonGraph(self, player):
 		N = HexState.BOARD_SIZE
@@ -214,31 +221,47 @@ class HexState:
 
 	def _update(self, action, player, basic):
 
+		begin = time.time()
 		self.lastAction = action
+		self.legalActions.remove(action)
 		self.board[action] = player
 		self.nextPlayer = 3-player
 		opponent = 3-player
 
-		if len(HexState.getNeighbors(self.board, [action], player)) >= 2:
-			explored = HexState.traverse(self.board, action, player)
-			if all( target in explored for target in HexState.TARGET_CELL[player]):
-				self.winner = player
-		elif len(self.getLegalActions()) == 0:
-			self.winner = 0
-
 		self._updateShannonGraphs(action, player)
+		# Check Goal State
+		try:
+			shortest = nx.shortest_path_length(
+				self.shannonGraphs[player], 
+				source=HexState.TARGET_CELL[player][0], 
+				target=HexState.TARGET_CELL[player][1],
+			)
+			if shortest == 1:
+				self.winner = player
+		except:
+			pass
+		#print('update',time.time()-begin)
 
 		if basic:
 			return
 
-		self._updateCaptured()
+
 		self._updateDead(action)
+		#self._updateCaptured()
+		#print(time.time()-begin)
 
 	def _updateCaptured(self):
 		for p in HexPlayer.EACH_PLAYER:
 			zone = HexState.getNeighbors(self.board, self.getAllCells(p))
+			for cell in zone:
+				if cell in self.captured[p]:
+					if cell in self.dead:
+						self.captured[p].remove(cell)
+				else:
+					if HexState.checkIsCapturedByPlayer(self.board, cell, p):
+						self.captured[p].add(cell)
 			#del self.captured
-			self.captured[p] = set([ cell for cell in zone if HexState.checkIsCapturedByPlayer(self.board, cell, p)])
+			#self.captured[p] = set([ cell for cell in zone if HexState.checkIsCapturedByPlayer(self.board, cell, p)])
 
 	def _updateDead(self, action):
 		neighbors = HexState.getNeighbors(self.board, [action])
@@ -290,12 +313,14 @@ class HexState:
 			cellStrList = []
 			for x in range(boardSize):
 				c = (x+1, y+1)
-				if board[c] == 0:
-					cellStrList.append(' ')
-				elif board[c] == 1:
+				if board[c] == HexPlayer.BLACK:
 					cellStrList.append('B')
-				elif board[c] == 2:
+				elif board[c] == HexPlayer.WHITE:
 					cellStrList.append('W')
+				elif self.isDead(c):
+					cellStrList.append('X')
+				elif board[c] == 0:
+					cellStrList.append(' ')
 			lines.append('|  ' + str(y+1)  + '  |  ' +  '  |  '.join( cellStrList ) + '  |')
 
 		lines.insert(0, ' '*halfLineLength+'B')
@@ -327,28 +352,55 @@ class HexState:
 		return self.board.keys()
 
 	def getLegalActions(self):
-		return self.getAllCells(0)
+		return self.legalActions
 
 	def getGoodActions(self):
-		goodActions = [action for action in self.getLegalActions()
-			if not self.isDead(action)]
-		#print(goodActions)
-		if len(goodActions) > 0:
-			return goodActions
-
-		return self.getLegalActions()
+		return self.getCells(player='legal', dead=False, captured=False)
 
 	def isLegalAction(self, action, player, prediction=False):
 		if not prediction and player != self.nextPlayer:
 			return False
 		return action in self.getLegalActions()
 
+	def getCells(self, **kwargs):
+		candidates = self.board.keys()
+
+		player = kwargs.pop('player')
+		assert player in ['all', 'legal', HexPlayer.BLACK, HexPlayer.WHITE]
+
+		if player == 'legal':
+			candidates = [ c for c in candidates if self.board[c] == 0 ]
+		elif not player == 'all':
+			candidates = [ c for c in candidates if self.board[c] == player ]
+
+		dead = kwargs.pop('dead', None)
+		assert dead in [True, False, None]
+		if dead != None:
+			candidates = [ c for c in candidates if self.isDead(c) == dead ]
+
+		captured = kwargs.pop('captured', None)
+		assert captured in [True, False, None]
+		if captured != None:
+			candidates_tmp = [ c for c in candidates if self.isCaptured(c) == captured ]
+			if len(candidates_tmp) != 0:
+				candidates = candidates_tmp
+
+		assert len(kwargs) == 0
+		#vulnerable = bool(kwargs.get('dead', False))
+			
+
+		return candidates
+
 	def getNextState(self, action, player=None, prediction=False, basic=True):
+		begin=time.time()
 		nextState = self.copy()
+		#print('copy',time.time()-begin)
 		if player == None:
 			player = self.nextPlayer
 		assert self.isLegalAction(action, player, prediction)
+
 		nextState._update(action, player, basic)
+		#print(time.time()-begin)
 		return nextState
 
 	def isDead(self, cell):
@@ -356,6 +408,12 @@ class HexState:
 
 	def isCapturedByPlayer(self, cell, player):
 		return cell in self.captured[player]
+
+	def isCaptured(self, cell):
+		for p in HexPlayer.EACH_PLAYER:
+			if self.isCapturedByPlayer(cell, p):
+				return True
+		return False
 
 	def isGoalState(self):
 		return self.winner != None
@@ -375,6 +433,26 @@ class HexState:
 		else:
 			return 0
 
+	def getShortestDistanceSum(self, player):
+		graph = self.shannonGraphs[player]
+
+		target = HexState.TARGET_CELL[player][0]
+		distances1 = nx.single_source_shortest_path_length(graph, source=target)
+		del distances1[target]
+		
+		target = HexState.TARGET_CELL[player][1]
+		distances2 = nx.single_source_shortest_path_length(graph, source=target)
+		del distances2[target]
+
+		shortestDistanceSum = {}
+		for cell in self.getCells(player='legal'):
+			try:
+				shortestDistanceSum[cell] = distances1[cell] + distances2[cell]
+			except:
+				pass
+		return shortestDistanceSum
+		
+
 	'''
 	def isVulnerableToPlayer(self, center, player):
 		if self.isDead(center):
@@ -391,83 +469,7 @@ class HexState:
 
 
 
-	def analysis(self):
-		N = HexState.BOARD_SIZE
-		begin = time.time()
-		actionSet = set(self.getGoodActions())
-
-		blackWinningActions = HexState.getWinningActions(self.board, HexPlayer.BLACK)
-		whiteWinningActions = HexState.getWinningActions(self.board, HexPlayer.WHITE)
-
-		actionSet -= whiteWinningActions
-		actionSet -= blackWinningActions
-
-		blackCells = self.getAllCells(HexPlayer.BLACK)
-		whiteCells = self.getAllCells(HexPlayer.WHITE)
-		blackDeadCells = set( [cell for cell in self.dead if cell in blackCells] )
-		whiteDeadCells = set( [cell for cell in self.dead if cell in whiteCells] )
-		deadActions = set( [action for action in self.dead if action in actionSet] )
-		actionSet -= deadActions
-		#print(time.time()-begin)
-		blackCapturedActions = set([action for action in HexState.getNeighbors(self.board, blackCells) if self.isCapturedByPlayer(action, HexPlayer.BLACK)])
-		actionSet -= blackCapturedActions
-		#print(time.time()-begin)
-		whiteCapturedActions = set([action for action in HexState.getNeighbors(self.board, whiteCells) if self.isCapturedByPlayer(action, HexPlayer.WHITE)])
-		actionSet -= whiteCapturedActions
-		#print(time.time()-begin)
-
-		#blackVulnerableActions = [action for action in actionSet if self.isVulnerableToPlayer(action, HexPlayer.BLACK)]
-		#whiteVulnerableActions = [action for action in actionSet if self.isVulnerableToPlayer(action, HexPlayer.WHITE)]
-
-		blackGraph = self.shannonGraphs[HexPlayer.BLACK]
-		blackShortestPath = nx.shortest_path_length(
-			blackGraph, 
-			source=(1, 0), 
-			target=(1, N+1),
-		)
-
-		whiteGraph = self.shannonGraphs[HexPlayer.WHITE]
-		whiteShortestPath = nx.shortest_path_length(
-			whiteGraph, 
-			source=(0, 1),
-			target=(N+1, 1),
-		)
-
-		result = {
-			'winning': {
-				1: blackWinningActions,
-				2: whiteWinningActions
-			},
-			'dead': {
-				1: blackDeadCells,
-				2: whiteDeadCells,
-				0: deadActions
-			},
-			'captured': {
-				1: blackCapturedActions,
-				2: whiteCapturedActions
-			},
-			'bridges': {
-				HexPlayer.BLACK: HexState.getPlayerBridgesNum(self.board, HexPlayer.BLACK),
-				HexPlayer.WHITE: HexState.getPlayerBridgesNum(self.board, HexPlayer.WHITE) 
-			},
-			'shortest': {
-				HexPlayer.BLACK: blackShortestPath,
-				HexPlayer.WHITE: whiteShortestPath
-			}
-		}
-
-		#print(result)
-		'''
-		print('Black Winning:', blackWinningActions)
-		print('White Winning:', whiteWinningActions)
-		print('Black Dead:', blackDeadCells)
-		print('White Dead:', whiteDeadCells)
-		print('Dead Actions:', deadActions)
-		print('Black Captured: ', blackCapturedActions)
-		print('White Captured: ', whiteCapturedActions)
-		'''
-		return result
+	
 		#print('Vulerable to Black: ', blackVulnerableActions)
 		#print('Vulerable to White: ', whiteVulnerableActions)
 	
@@ -564,6 +566,8 @@ class HexState:
 				if river1 in board and board[river1] == 0 and river2 in board and board[river2] == 0:
 					count += 1
 		return int(count / 2)
+
+
 
 
 

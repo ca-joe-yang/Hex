@@ -4,6 +4,7 @@ import numpy as np
 from abc import ABCMeta, abstractmethod
 from math import log, sqrt
 from collections import defaultdict
+import networkx as nx
 #from hex import HexState
 
 class Agent:
@@ -11,7 +12,8 @@ class Agent:
 		self.player = player
 		self.opponent = 3-player
 		self.actionNum = 0
-		self.capturedZone = []
+		self.my_move_history = []
+		self.opponent_moves_history = []
 
 	@abstractmethod
 	def getAction(self, gameState): 
@@ -23,24 +25,140 @@ class Agent:
 		elif self.player == 2:
 			return 'WHITE'
 
-def evaluationFunction(gameState, player):
-	analysis = gameState.analysis()
-	opponent = 3-player
-	#print(analysis['shortest'])
+	def getRandomLegalAction(self, gameState):
+		bestActions = gameState.getLegalActions()
+		bestAction = random.choice(bestActions)
+		return bestAction
 
-	score = 1000 * gameState.getReward(player)
-	score += 500 * len(analysis['winning'][player])
-	score -= 500 * len(analysis['winning'][opponent])
-	score -= 100 * analysis['shortest'][player]
-	score += 100 * analysis['shortest'][opponent]
-	score -= 5 * len(analysis['dead'][player])
-	score += 5 * len(analysis['dead'][opponent])
-	score += 5 * len(analysis['captured'][player])
-	score -= 5 * len(analysis['captured'][opponent])
-	score += 10 * analysis['bridges'][player]
-	score -= 10 * analysis['bridges'][opponent]
-	#print(gameState, score)
-	return score
+	def getRandomGoodAction(self, gameState):
+		bestActions = gameState.getGoodActions()
+		bestAction = random.choice(bestActions)
+		return bestAction
+
+	def evaluationFunction(self, gameState, player):
+		'''
+		analysis = gameState.analysis()
+		opponent = 3-player
+
+		score = 1000 * gameState.getReward(player)
+		score += 500 * len(analysis['winning'][player])
+		score -= 500 * len(analysis['winning'][opponent])
+		score -= 100 * analysis['shortest'][player]
+		score += 100 * analysis['shortest'][opponent]
+		score -= 5 * len(analysis['dead'][player])
+		score += 5 * len(analysis['dead'][opponent])
+		score += 5 * len(analysis['captured'][player])
+		score -= 5 * len(analysis['captured'][opponent])
+		score += 10 * analysis['bridges'][player]
+		score -= 10 * analysis['bridges'][opponent]
+		'''
+		#print(gameState, score)
+		return 0.0
+
+	def evaluationFunction(self, gameState, player, **kwargs):
+		method = kwargs.pop('method', 'sspl')
+		if method == 'analysis':
+			return self.evaluationByAnalysis(gameState, player)
+		elif method == 'sspl':
+			return self.evaluationBySecondShortestPathLength(gameState, player)
+
+
+	def evaluationByAnalysis(self, gameState, player):
+		
+		N = HexState.BOARD_SIZE
+		#actionSet = set(self.getGoodActions())
+
+		#blackWinningActions = HexState.getWinningActions(self.board, HexPlayer.BLACK)
+		#whiteWinningActions = HexState.getWinningActions(self.board, HexPlayer.WHITE)
+
+		#actionSet -= whiteWinningActions
+		#actionSet -= blackWinningActions
+
+		#blackCells = self.getAllCells(HexPlayer.BLACK)
+		#whiteCells = self.getAllCells(HexPlayer.WHITE)
+		
+		#blackDeadCells = [cell for cell in gameState.dead if cell in gameState.getCells(player=HexPlayer.BLACK)]
+		#whiteDeadCells = [cell for cell in gameState.dead if cell in gameState.getCells(player=HexPlayer.BLACK)]
+		#deadActions = set( [action for action in self.dead if action in actionSet] )
+		#actionSet -= deadActions
+		#print(time.time()-begin)
+		#blackCapturedActions = [action for action in HexState.getNeighbors(self.board, blackCells) if self.isCapturedByPlayer(action, HexPlayer.BLACK)]
+		#actionSet -= blackCapturedActions
+		#print(time.time()-begin)
+		#whiteCapturedActions = set([action for action in HexState.getNeighbors(self.board, whiteCells) if self.isCapturedByPlayer(action, HexPlayer.WHITE)])
+		#actionSet -= whiteCapturedActions
+		#print(time.time()-begin)
+
+		#blackVulnerableActions = [action for action in actionSet if self.isVulnerableToPlayer(action, HexPlayer.BLACK)]
+		#whiteVulnerableActions = [action for action in actionSet if self.isVulnerableToPlayer(action, HexPlayer.WHITE)]
+
+		'''
+		blackGraph = self.shannonGraphs[HexPlayer.BLACK]
+		blackShortestPath = nx.shortest_path_length(
+			blackGraph, 
+			source=(1, 0), 
+			target=(1, N+1),
+		)
+
+		whiteGraph = self.shannonGraphs[HexPlayer.WHITE]
+		whiteShortestPath = nx.shortest_path_length(
+			whiteGraph, 
+			source=(0, 1),
+			target=(N+1, 1),
+		)
+
+		result = {
+			'winning': {
+				1: blackWinningActions,
+				2: whiteWinningActions
+			},
+			'dead': {
+				1: blackDeadCells,
+				2: whiteDeadCells,
+				0: deadActions
+			},
+			'captured': {
+				1: blackCapturedActions,
+				2: whiteCapturedActions
+			},
+			'bridges': {
+				HexPlayer.BLACK: HexState.getPlayerBridgesNum(self.board, HexPlayer.BLACK),
+				HexPlayer.WHITE: HexState.getPlayerBridgesNum(self.board, HexPlayer.WHITE) 
+			},
+			'shortest': {
+				HexPlayer.BLACK: blackShortestPath,
+				HexPlayer.WHITE: whiteShortestPath
+			}
+		}
+		'''
+
+		#print(result)
+		'''
+		print('Black Winning:', blackWinningActions)
+		print('White Winning:', whiteWinningActions)
+		print('Black Dead:', blackDeadCells)
+		print('White Dead:', whiteDeadCells)
+		print('Dead Actions:', deadActions)
+		print('Black Captured: ', blackCapturedActions)
+		print('White Captured: ', whiteCapturedActions)
+		'''
+		#return result
+
+		return 0.0
+
+	def evaluationBySecondShortestPathLength(self, gameState, player):
+		N = gameState.N
+		if gameState.isGoalState():
+			return gameState.getReward(player)
+		d = gameState.getShortestDistanceSum(player)
+		#secondShortestDistance = min( distance.remove(min(distance)) )
+		shortest = min(d.values())
+		print(d)
+		for x in d:
+			if d[x] == shortest:
+				del d[x]
+				break
+		return (N+1-min(d.values())) / N
 
 
 class RandomAgent(Agent):
@@ -49,8 +167,7 @@ class RandomAgent(Agent):
 		super(RandomAgent, self).__init__(player)
 
 	def getAction(self, gameState):
-		action = random.choice(gameState.getLegalActions())
-		return action
+		return self.getRandomLegalAction(gameState)
 
 class BetterRandomAgent(Agent):
 
@@ -58,52 +175,33 @@ class BetterRandomAgent(Agent):
 		super(BetterRandomAgent, self).__init__(player)
 
 	def getAction(self, gameState):
-		#self.evaluateActions(gameState)
-		action = random.choice(gameState.getGoodActions())
-		return action		
-		#capturedPairs = gameState.getAllCapturedPairs()
-		#print(capturedPairs)
-
-		#actions = [action for action in goodActions if not gameState.isCaptured(action)]
-
-		'''
-		lastAction = gameState.lastAction
-		print('My: ', self.capturedZone)
-		counterAction = self.isCaptured(lastAction)
-		self.capturedZone = gameState.getCapturedZone()
-		if counterAction:
-			return counterAction
-		actions = [action for action in goodActions if not self.isCaptured(action)]
-		#print(actions)
-		'''
-		#return random.choice(goodActions)
+		return self.getRandomGoodAction(gameState)	
 
 class HumanAgent(Agent):
 	
 	def __init__(self, player):
 		super(HumanAgent, self).__init__(player)
-		self.betterRandomAgent = BetterRandomAgent(player)
 
 	def getAction(self, gameState):
-		gameState.analysis()
-		print(evaluationFunction(gameState, self.player))
 		legalActions = gameState.getLegalActions()
+		print(self.evaluationFunction(gameState, self.player))
 		while True:
-			#print(gameState.getCapturedZone(1))
 			yourMoveStr = input('Your(' + self.getName() + ') move: ')
-			if yourMoveStr == 'random' or yourMoveStr == 'r':
-				return self.betterRandomAgent.getAction(gameState)
+			if yourMoveStr in ['random', 'r']:
+				return self.getRandomGoodAction(gameState)
 			tokens = yourMoveStr.split(',')
 			if len(tokens) != 2:
-				print('Illegal input!')
 				continue
-			action = tuple([int(i) for i in tokens])
+			for t in tokens:
+				if not isinstance(t, int):
+					continue
+			action = tuple( [int(t) for t in tokens] )
 			if action not in legalActions:
 				print('Illegal action!')
 				continue
 			break
+		print(action)
 		return action
-
 
 class AlphaBetaSearchAgent(Agent):
 
@@ -116,7 +214,7 @@ class AlphaBetaSearchAgent(Agent):
 		self.searchCount += 1
 		print(self.searchCount)
 		if depth == 0 or gameState.isGoalState():
-			return evaluationFunction(gameState, self.player), []
+			return self.evaluationFunction(gameState, self.player, method='sspl'), []
 			
 		actions = gameState.getGoodActions()
 		#print(alpha, beta)
@@ -252,10 +350,14 @@ class MonteCarloSearchAgent(Agent):
 
 		player = gameState.nextPlayer
 
-		bestAction = max( [ action for action in gameState.getGoodActions() if gameState.getNextState(action) in self.tree ], 
-				key=lambda x: self.tree[gameState.getNextState(x)].getScore())
+		for a in gameState.getGoodActions():
+			if frozenset({a}) in self.tree:
+				print(a, self.tree[frozenset({a})])
+		#print(self.tree)
+		bestAction = max( [ action for action in gameState.getGoodActions() if frozenset({action}) in self.tree ], 
+				key=lambda x: self.tree[frozenset({x})].getScore())
 
-		print('Average reward:', self.tree[gameState.getNextState(bestAction)].getScore())
+		print('Average reward:', self.tree[frozenset({bestAction})].getScore())
 
 		return bestAction
 
@@ -269,39 +371,51 @@ class MonteCarloSearchAgent(Agent):
 		
 		explored = set()
 		currentState = gameState.copy()
-		player = currentState.nextPlayer
+		player = self.player
 
 		expand = True
 		depth = 0
+		actionPath = frozenset()
+		
 
 		while True:
-			depth += 1
 			begin = time.time()
-			nextStates = [currentState.getNextState(action) for action in currentState.getGoodActions()]
+			depth += 1
+			#print(actionPath)
 			#print(time.time()-begin)
-			if all( nextState in self.tree for nextState in nextStates):
+			nextActionPaths = [actionPath | frozenset({action}) for action in currentState.getGoodActions()]
+			#print(time.time()-begin)
+			#print(time.time()-begin)
+			if all( nextActionPath in self.tree for nextActionPath in nextActionPaths):
 				# UCB1
-				logSum = log( sum( self.tree[ nextState ].visits for nextState in nextStates ) or 1 )
-				currentState = max( [ nextState for nextState in nextStates ], 
+				logSum = log( sum( self.tree[ nextActionPath ].visits for nextActionPath in nextActionPaths ) or 1 )
+				newActionPath = max( [ nextActionPath for nextActionPath in nextActionPaths ], 
 					key=lambda x: self.tree[x].getScore() + self.C * sqrt(logSum / (self.tree[x].visits or 1)) )
 			else:
-				currentState = random.choice(nextStates)
+				newActionPath = random.choice(nextActionPaths)
 
-			if expand and currentState not in self.tree:
+			#print(newActionPath)
+			newAction = list(newActionPath - actionPath)[0]
+			actionPath = newActionPath.copy()
+			#print(newAction)
+			currentState = currentState.getNextState(newAction)
+
+			if expand and newActionPath not in self.tree:
 				expand = False
-				self.tree[ currentState ] = MonteCarloNode()
+				self.tree[ newActionPath ] = MonteCarloNode()
 				self.maxDepth = max(depth, self.maxDepth)
-			explored.add(currentState)
+			explored.add(newActionPath)
+
+			#print(time.time()-begin)
 			if currentState.isGoalState():
 				break
 
 		#print(currentState)
 		# Back-propagation
 		reward = currentState.getReward(player)
-		for state in explored:
-			if state not in self.tree:
-				continue
-			self.tree[state].update(reward)
+		for path in explored:
+			if path in self.tree:
+				self.tree[path].update(reward)
 		return reward
 
 
