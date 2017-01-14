@@ -153,7 +153,7 @@ class Agent:
 		d = gameState.getShortestDistanceSum(player)
 		#secondShortestDistance = min( distance.remove(min(distance)) )
 		shortest = min(d.values())
-		print(d)
+		
 		for x in d:
 			if d[x] == shortest:
 				del d[x]
@@ -351,13 +351,14 @@ class MonteCarloSearchAgent(Agent):
 		player = gameState.nextPlayer
 
 		for a in gameState.getGoodActions():
-			if frozenset({a}) in self.tree:
-				print(a, self.tree[frozenset({a})])
+			t = (frozenset({a}), frozenset())
+			if t in self.tree:
+				print(a, self.tree[t])
 		#print(self.tree)
-		bestAction = max( [ action for action in gameState.getGoodActions() if frozenset({action}) in self.tree ], 
-				key=lambda x: self.tree[frozenset({x})].getScore())
+		bestAction = max( [ action for action in gameState.getGoodActions() if (frozenset({action}), frozenset()) in self.tree ], 
+				key=lambda x: self.tree[ (frozenset({x}), frozenset()) ].getScore())
 
-		print('Average reward:', self.tree[frozenset({bestAction})].getScore())
+		print('Average reward:', self.tree[ (frozenset({bestAction}), frozenset()) ].getScore())
 
 		return bestAction
 
@@ -370,20 +371,32 @@ class MonteCarloSearchAgent(Agent):
 		# variable lookup instead of an attribute access each loop.
 		
 		explored = set()
+		#print(gameState)
 		currentState = gameState.copy()
 		player = self.player
 
 		expand = True
 		depth = 0
-		actionPath = frozenset()
-		
+		legalActions = currentState.getLegalActions().copy()
+		actionPath = (frozenset(), frozenset())
+		firstPlayer = self.player
+		secondPlayer = self.opponent
+		maxActionNum = len(legalActions)
+		#print(maxActionNum)
 
+		begin = time.time()
 		while True:
-			begin = time.time()
+			
 			depth += 1
 			#print(actionPath)
 			#print(time.time()-begin)
-			nextActionPaths = [actionPath | frozenset({action}) for action in currentState.getGoodActions()]
+			#print(legalActions)
+			if player == firstPlayer:
+				nextActionPaths = [ (actionPath[0] | frozenset({action}), actionPath[1]) for action in legalActions]
+			elif player == secondPlayer:
+				nextActionPaths = [ (actionPath[0], frozenset({action}) | actionPath[1]) for action in legalActions]
+			
+			
 			#print(time.time()-begin)
 			#print(time.time()-begin)
 			if all( nextActionPath in self.tree for nextActionPath in nextActionPaths):
@@ -394,11 +407,19 @@ class MonteCarloSearchAgent(Agent):
 			else:
 				newActionPath = random.choice(nextActionPaths)
 
+			
 			#print(newActionPath)
-			newAction = list(newActionPath - actionPath)[0]
-			actionPath = newActionPath.copy()
+			if player == firstPlayer:
+				newAction = list(newActionPath[0] - actionPath[0])[0]
+				player = secondPlayer
+			elif player == secondPlayer:
+				newAction = list(newActionPath[1] - actionPath[1])[0]
+				player = firstPlayer
+
+			legalActions.remove(newAction)
+			actionPath = newActionPath
 			#print(newAction)
-			currentState = currentState.getNextState(newAction)
+			#currentState = currentState.getNextState(newAction)
 
 			if expand and newActionPath not in self.tree:
 				expand = False
@@ -406,13 +427,19 @@ class MonteCarloSearchAgent(Agent):
 				self.maxDepth = max(depth, self.maxDepth)
 			explored.add(newActionPath)
 
-			#print(time.time()-begin)
-			if currentState.isGoalState():
+			
+			#if currentState.isGoalState():
+				#break
+			if len(legalActions) == 0:
 				break
-
+		#print(time.time()-begin)
+		#print(actionPath)
+		#currentState.getEndState(actionPath)
+		#print(actionPath)
 		#print(currentState)
 		# Back-propagation
-		reward = currentState.getReward(player)
+		#reward = 1
+		reward = currentState.getEndStateReward(actionPath, firstPlayer)
 		for path in explored:
 			if path in self.tree:
 				self.tree[path].update(reward)

@@ -12,10 +12,10 @@ class HexPlayer():
 
 	@staticmethod
 	def OPPONENT(player):
-		if player == BLACK:
-			return WHITE
-		elif player == WHITE:
-			return BLACK
+		if player == HexPlayer.BLACK:
+			return HexPlayer.WHITE
+		elif player == HexPlayer.WHITE:
+			return HexPlayer.BLACK
 		return None
 
 class HexEnv():
@@ -402,6 +402,43 @@ class HexState:
 		nextState._update(action, player, basic)
 		#print(time.time()-begin)
 		return nextState
+
+	def getEndStateReward(self, actionPaths, player):
+		playerActions = actionPaths[0]
+		opponentActions = actionPaths[1]
+
+		endState = self.copy()
+		
+		p = endState.nextPlayer
+		for action in playerActions:
+			endState.board[action] = player
+			endState._updateShannonGraphs(action, player)
+
+		opponent = HexPlayer.OPPONENT(player)
+		for action in opponentActions:
+			endState.board[action] = opponent
+			endState._updateShannonGraphs(action, opponent)
+
+		for p in HexPlayer.EACH_PLAYER:
+			try:
+				shortest = nx.shortest_path_length(
+					endState.shannonGraphs[p], 
+					source=HexState.TARGET_CELL[p][0], 
+					target=HexState.TARGET_CELL[p][1],
+				)
+				if shortest == 1:
+					winner = p
+					break
+			except:
+				pass
+		#print(winner)
+		#print(endState, winner)
+		if winner == player:
+			return 1
+		elif winner == HexPlayer.OPPONENT(player):
+			return -1
+
+
 
 	def isDead(self, cell):
 		return cell in self.dead
