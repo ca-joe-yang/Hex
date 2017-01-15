@@ -6,6 +6,7 @@ from math import log, sqrt
 from collections import defaultdict
 import networkx as nx
 from hex import HexPlayer
+import itertools
 
 class Agent:
 	def __init__(self, player):
@@ -322,6 +323,8 @@ class MonteCarloNode(object):
 		self.heuristic = h
 		self.value = value
 		self.visits = visits
+		#self.parent = []
+		#self.child = []
 
 	def __str__(self):
 		return('{ value: ' + str(self.value) + ', visits: ' + str(self.visits) + '}')
@@ -335,6 +338,46 @@ class MonteCarloNode(object):
 
 	def getProgressiveBias(self):
 		return (self.heuristic+self.value) / (self.visits or 1)
+
+'''
+class MonteCarloTree():
+
+	def __init__(self, root):
+		self.root = None
+
+	def addNode(self, node, parent):
+		if self.root = None:
+			self.root = node
+
+		parent.child.append(node)
+		node.parent.append(parent)
+
+	def setRoot(self, node):
+		self.root = node
+
+	def deleteSubtree(self, node):
+'''
+
+def generateAMAFBackwardPropagation(explored, sizeThreshold):
+	#print(explored)
+	AMAF = set()
+	for actionHistory in explored:
+		blackHistory = actionHistory[0]
+		blackNum = len(blackHistory)
+		whiteHistory = actionHistory[1]
+		whiteNum = len(whiteHistory)
+		for i in range(blackNum+1):
+			for j in range(whiteNum+1):
+				if i + j < sizeThreshold:
+					continue
+				b = (itertools.combinations(blackHistory, i))
+				w = (itertools.combinations(whiteHistory, j))
+				for x in b:
+					for y in w:
+						AMAF.add( (frozenset(x),frozenset(y)) )
+
+	return AMAF
+
 
 
 
@@ -350,13 +393,14 @@ class MonteCarloSearchAgent(Agent):
 
 	def __init__(self, player, **kwargs):
 		super(MonteCarloSearchAgent, self).__init__(player)
-		self.simulationTimeLimit = float(kwargs.get('time', 30))
+		self.simulationTimeLimit = float(kwargs.get('time', 45))
 		# self.simulationActionsLimit = int(kwargs.get('max_actions', 1000))
 		# Exploration constant, increase for more exploratory actions,
 		# decrease to prefer actions with known higher win rates.
 		self.C = float(kwargs.get('C', 1.4))
 		self.searchActions = set()
 		self.tree = {} #defaultdict(MonteCarloNode)
+		#self.tree = MonteCarloTree()
 
 	def getAction(self, gameState):
 		# Causes the AI to calculate the best action from the
@@ -420,6 +464,7 @@ class MonteCarloSearchAgent(Agent):
 
 		# Action Path ( BLACK, WHITE )
 		actionHistory = currentState.actionHistory
+		minActionNum = currentState.getAlreadyPlayedActionsNum()
 
 		
 		#maxActionNum = len(legalActions)
@@ -432,7 +477,10 @@ class MonteCarloSearchAgent(Agent):
 			#print(actionPath)
 			#print(time.time()-begin)
 			#print(legalActions)
-			actions = self.getReflexActions(currentState)
+			if depth == 1:
+				actions = currentState.getGoodActions()
+			else:
+				actions = self.getReflexActions(currentState)
 
 			if player == HexPlayer.BLACK:
 				nextActionHistories = [ (actionHistory[0] | frozenset({action}), actionHistory[1]) for action in actions]
@@ -455,18 +503,16 @@ class MonteCarloSearchAgent(Agent):
 			
 			if player == HexPlayer.BLACK:
 				newAction = list(newActionHistory[0] - actionHistory[0])[0]
-				#player = secondPlayer
 			elif player == HexPlayer.WHITE:
 				newAction = list(newActionHistory[1] - actionHistory[1])[0]
-				#player = firstPlayer
-
-			actionHistory = newActionHistory
-			currentState.setToNextState(newAction, player)
 
 			if expand and newActionHistory not in self.tree:
 				expand = False
 				self.tree[ newActionHistory ] = MonteCarloNode( self.evaluationFunction(currentState, firstPlayer) )
 				self.maxDepth = max(depth, self.maxDepth)
+
+			actionHistory = newActionHistory
+			currentState.setToNextState(newAction, player)
 			explored.add(newActionHistory)
 			
 			player = HexPlayer.OPPONENT(player)
@@ -474,10 +520,12 @@ class MonteCarloSearchAgent(Agent):
 			if currentState.isGoalState():
 				break
 		
+		AMAF = generateAMAFBackwardPropagation(set(self.tree)&explored, minActionNum) & set(self.tree)
+		
+		#print(AMAF-explored)
 		reward = currentState.getReward(firstPlayer)
-		for path in explored:
-			if path in self.tree:
-				self.tree[path].update(reward)
+		for path in AMAF:
+			self.tree[path].update(reward)
 		return reward
 
 

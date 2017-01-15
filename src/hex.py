@@ -24,6 +24,7 @@ class HexEnv():
 	def __init__(self, boardSize, verbose=True):
 		#self.setHexStateParameter(boardSize)
 		self.reset(boardSize)
+		HexState.INIT_BOARD = self.gameState
 		self.verbose = verbose
 		self.playerAgent = { 1: None, 2: None }
 
@@ -76,6 +77,8 @@ class HexEnv():
 class HexState:
 
 	BOARD_SIZE = None
+
+	INIT_BOARD = None
 
 	TARGET_CELL = {
 		HexPlayer.BLACK: [],
