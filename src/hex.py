@@ -60,6 +60,7 @@ class HexEnv():
 			self.step(action, player)
 
 			if self.verbose:
+				print(gameState.bridgePairs)
 				print('Response Time: ', time.time()-begin)
 				print(agent.getName(), 'move:', action)
 				self.render()
@@ -140,6 +141,10 @@ class HexState:
 		self.legalActions = []
 		self.goodActions = []
 		self.actionHistory = ( frozenset(), frozenset() )
+		self.bridgePairs = {
+			HexPlayer.BLACK: {},
+			HexPlayer.WHITE: {},
+		}
 
 		for x in range(N):
 			for y in range(N):
@@ -230,8 +235,9 @@ class HexState:
 		begin = time.time()
 		self.lastAction = action
 		self.legalActions.remove(action)
-		self.goodActions.remove(action)
-		
+		if action in self.goodActions:
+			self.goodActions.remove(action)
+
 		if player == HexPlayer.BLACK:
 			self.actionHistory = (self.actionHistory[0] | frozenset({action}), self.actionHistory[1])
 		elif player == HexPlayer.WHITE:
@@ -255,6 +261,7 @@ class HexState:
 			pass
 		#print('update',time.time()-begin)
 
+		self._updateBridgePairs(action, player)
 		if basic:
 			return
 
@@ -262,6 +269,35 @@ class HexState:
 		self._updateDead(action)
 		#self._updateCaptured()
 		#print(time.time()-begin)
+
+	def _updateBridgePairs(self, action, player):
+		for p in HexPlayer.EACH_PLAYER:
+			for a in list(self.bridgePairs[p]):
+				if action in self.bridgePairs[p][a]:
+					self.bridgePairs[p][a].remove(action)
+				if len(self.bridgePairs[p][a]) == 0:
+					del self.bridgePairs[p][a]
+
+		cx, cy = action
+		for i in range(6):
+			j = (i+1) % 6
+			dx1, dy1 = HexState.NEIGHBORNG_DIRECTION[i]
+			dx2, dy2 = HexState.NEIGHBORNG_DIRECTION[j]
+			river1 = (cx + dx1, cy + dy1)
+			river2 = (cx + dx2, cy + dy2)
+			bridge = (cx + dx1 + dx2, cy + dy1 + dy2)
+			if bridge not in self.board or self.board[bridge] != player:
+				continue
+			if river1 in self.board and self.board[river1] == 0 and river2 in self.board and self.board[river2] == 0:
+				if river1 not in self.bridgePairs[player]:
+					self.bridgePairs[player][river1] = []
+				if river2 not in self.bridgePairs[player]:
+					self.bridgePairs[player][river2] = []
+				self.bridgePairs[player][river1].append(river2)
+				self.bridgePairs[player][river2].append(river1)
+
+
+
 
 	def _updateCaptured(self):
 		for p in HexPlayer.EACH_PLAYER:

@@ -35,6 +35,13 @@ class Agent:
 		bestAction = random.choice(bestActions)
 		return bestAction
 
+
+	def getReflexActions(self, gameState):
+		if gameState.lastAction in gameState.bridgePairs[self.player]:
+			return gameState.bridgePairs[self.player][gameState.lastAction]
+		return gameState.getGoodActions()	
+
+
 	def evaluationFunction(self, gameState, player):
 		'''
 		analysis = gameState.analysis()
@@ -177,6 +184,15 @@ class BetterRandomAgent(Agent):
 	def getAction(self, gameState):
 		return self.getRandomGoodAction(gameState)	
 
+
+class ReflexAgent(Agent):
+
+	def __init__(self, player):
+		super(ReflexAgent, self).__init__(player)
+
+	def getAction(self, gameState):
+		return self.getReflexAction(gameState)	
+
 class HumanAgent(Agent):
 	
 	def __init__(self, player):
@@ -300,9 +316,10 @@ class MyAgent2(Agent):
 
 
 class MonteCarloNode(object):
-	__slots__ = ('value', 'visits')
+	__slots__ = ('value', 'visits', 'heuristic')
 
-	def __init__(self, value=0.0, visits=0):
+	def __init__(self, h, value=0.0, visits=0):
+		self.heuristic = h
 		self.value = value
 		self.visits = visits
 
@@ -315,6 +332,12 @@ class MonteCarloNode(object):
 
 	def getScore(self):
 		return self.value / (self.visits or 1)
+
+	def getProgressiveBias(self):
+		return (self.heuristic+self.value) / (self.visits or 1)
+
+
+
 
 def appendActionHistory(actionHistory, action, player):
 	if player == HexPlayer.BLACK:
@@ -342,7 +365,7 @@ class MonteCarloSearchAgent(Agent):
 		assert not gameState.isGoalState()
 
 		self.maxDepth = 0
-		print(self.tree)
+		#print(self.tree)
 
 		for n in list(self.tree):
 			if len(n[0]) + len(n[1]) <= gameState.getAlreadyPlayedActionsNum():
@@ -409,12 +432,12 @@ class MonteCarloSearchAgent(Agent):
 			#print(actionPath)
 			#print(time.time()-begin)
 			#print(legalActions)
-			#goodActions = currentState.goodActions()
+			actions = self.getReflexActions(currentState)
 
 			if player == HexPlayer.BLACK:
-				nextActionHistories = [ (actionHistory[0] | frozenset({action}), actionHistory[1]) for action in currentState.getGoodActions()]
+				nextActionHistories = [ (actionHistory[0] | frozenset({action}), actionHistory[1]) for action in actions]
 			elif player == HexPlayer.WHITE:
-				nextActionHistories = [ (actionHistory[0], frozenset({action}) | actionHistory[1]) for action in currentState.getGoodActions()]
+				nextActionHistories = [ (actionHistory[0], frozenset({action}) | actionHistory[1]) for action in actions]
 			
 			
 			#print(time.time()-begin)
@@ -423,7 +446,7 @@ class MonteCarloSearchAgent(Agent):
 				# UCB1
 				logSum = log( sum( self.tree[ nextActionHistory ].visits for nextActionHistory in nextActionHistories ) or 1 )
 				newActionHistory = max( [ nextActionHistory for nextActionHistory in nextActionHistories ], 
-					key=lambda x: self.tree[x].getScore() + self.C * sqrt(logSum / (self.tree[x].visits or 1)) )
+					key=lambda x: self.tree[x].getProgressiveBias() + self.C * sqrt(logSum / (self.tree[x].visits or 1)) )
 			else:
 				newActionHistory = random.choice(nextActionHistories)
 
@@ -436,14 +459,13 @@ class MonteCarloSearchAgent(Agent):
 			elif player == HexPlayer.WHITE:
 				newAction = list(newActionHistory[1] - actionHistory[1])[0]
 				#player = firstPlayer
-			
 
 			actionHistory = newActionHistory
 			currentState.setToNextState(newAction, player)
 
 			if expand and newActionHistory not in self.tree:
 				expand = False
-				self.tree[ newActionHistory ] = MonteCarloNode()
+				self.tree[ newActionHistory ] = MonteCarloNode( self.evaluationFunction(currentState, firstPlayer) )
 				self.maxDepth = max(depth, self.maxDepth)
 			explored.add(newActionHistory)
 			
