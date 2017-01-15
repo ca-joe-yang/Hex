@@ -700,7 +700,38 @@ class HexState:
 		#print(time.time()-begin)
 		return hash(tuple(hashkey))
 
-		#return HexState.getHashKeyFromBoard(HexState.getNextBoard(board, action, player))
+
+
+	@staticmethod
+	def convertBoardStr2ActionHistory(boardStr):
+		blackHistory = set()
+		whiteHistory = set()
+		assert len(boardStr) == HexState.BOARD_SIZE**2
+		for i in range(len(boardStr)):
+			cell = int(boardStr[i])
+			pos = (int(i/7)+1, int(i%7)+1)
+			if cell == HexPlayer.BLACK:
+				blackHistory.add(pos)
+			elif cell == HexPlayer.WHITE:
+				whiteHistory.add(pos)
+		return (frozenset(blackHistory), frozenset(whiteHistory))
+
+	@staticmethod
+	def convertActionHistory2BoardStr(actionHistory):
+		blackHistory = actionHistory[0]
+		whiteHistory = actionHistory[1]
+		boardStr = ''
+		for x in range(HexState.BOARD_SIZE):
+			for y in range(HexState.BOARD_SIZE):
+				c = (x+1, y+1)
+				if c in blackHistory:
+					boardStr += str(HexPlayer.BLACK)
+				elif c in whiteHistory:
+					boardStr += str(HexPlayer.WHITE)
+				else:
+					boardStr += '0'
+		assert len(boardStr) == HexState.BOARD_SIZE**2
+		return boardStr
 
 
 

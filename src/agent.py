@@ -5,8 +5,9 @@ from abc import ABCMeta, abstractmethod
 from math import log, sqrt
 from collections import defaultdict
 import networkx as nx
-from hex import HexPlayer
+from hex import HexPlayer, HexState
 import itertools
+import _pickle as pickle
 
 class Agent:
 	def __init__(self, player):
@@ -217,7 +218,6 @@ class HumanAgent(Agent):
 				print('Illegal action!')
 				continue
 			break
-		print(action)
 		return action
 
 class AlphaBetaSearchAgent(Agent):
@@ -358,23 +358,22 @@ class MonteCarloTree():
 	def deleteSubtree(self, node):
 '''
 
-def generateAMAFBackwardPropagation(explored, sizeThreshold):
+def generateAMAFBackwardPropagation(actionHistory, sizeThreshold):
 	#print(explored)
 	AMAF = set()
-	for actionHistory in explored:
-		blackHistory = actionHistory[0]
-		blackNum = len(blackHistory)
-		whiteHistory = actionHistory[1]
-		whiteNum = len(whiteHistory)
-		for i in range(blackNum+1):
-			for j in range(whiteNum+1):
-				if i + j < sizeThreshold:
-					continue
-				b = (itertools.combinations(blackHistory, i))
-				w = (itertools.combinations(whiteHistory, j))
-				for x in b:
-					for y in w:
-						AMAF.add( (frozenset(x),frozenset(y)) )
+	blackHistory = actionHistory[0]
+	blackNum = len(blackHistory)
+	whiteHistory = actionHistory[1]
+	whiteNum = len(whiteHistory)
+	for i in range(blackNum+1):
+		for j in range(whiteNum+1):
+			if i + j < sizeThreshold:
+				continue
+			b = (itertools.combinations(blackHistory, i))
+			w = (itertools.combinations(whiteHistory, j))
+			for x in b:
+				for y in w:
+					AMAF.add( (frozenset(x),frozenset(y)) )
 
 	return AMAF
 
@@ -399,8 +398,39 @@ class MonteCarloSearchAgent(Agent):
 		# decrease to prefer actions with known higher win rates.
 		self.C = float(kwargs.get('C', 1.4))
 		self.searchActions = set()
-		self.tree = {} #defaultdict(MonteCarloNode)
+		self.dataFilename = 'data/Hex7x7.pkl'
+		self.tree = self._loadTree()
+		#print(self.tree)
+		#defaultdict(MonteCarloNode)
 		#self.tree = MonteCarloTree()
+
+	def __del__(self):
+		self._saveTree()
+
+	def _saveTree(self):
+		tree = {}
+		for n in self.tree:
+			key = HexState.convertActionHistory2BoardStr(n)
+			tree[key] = {
+				'heuristic': self.tree[n].heuristic,
+				'value': self.tree[n].value,
+				'visits': self.tree[n].visits,
+			}
+		#print(tree)
+		with open(self.dataFilename, 'wb') as f:
+			pickle.dump(tree, f)
+
+	def _loadTree(self):
+		x = {}
+		try:
+			with open(self.dataFilename, 'rb') as f:
+				tree = pickle.load(f)
+			for n in tree:
+				key = HexState.convertBoardStr2ActionHistory(n)
+				x[key] = MonteCarloNode(tree[n]['heuristic'], tree[n]['value'], tree[n]['visits'])
+		except:
+			x = {}
+		return x
 
 	def getAction(self, gameState):
 		# Causes the AI to calculate the best action from the
@@ -411,9 +441,11 @@ class MonteCarloSearchAgent(Agent):
 		self.maxDepth = 0
 		#print(self.tree)
 
+		'''
 		for n in list(self.tree):
 			if len(n[0]) + len(n[1]) <= gameState.getAlreadyPlayedActionsNum():
 				del self.tree[n]
+		'''
 
 		#print(self.searchActions)
 
@@ -452,7 +484,7 @@ class MonteCarloSearchAgent(Agent):
 		# A bit of an optimization here, so we have a local
 		# variable lookup instead of an attribute access each loop.
 		
-		explored = set()
+		lastNodeKey = None
 		#print(gameState)
 		currentState = gameState.copy()
 
@@ -506,23 +538,27 @@ class MonteCarloSearchAgent(Agent):
 			elif player == HexPlayer.WHITE:
 				newAction = list(newActionHistory[1] - actionHistory[1])[0]
 
+			actionHistory = newActionHistory
+			currentState.setToNextState(newAction, player)
+
 			if expand and newActionHistory not in self.tree:
 				expand = False
 				self.tree[ newActionHistory ] = MonteCarloNode( self.evaluationFunction(currentState, firstPlayer) )
 				self.maxDepth = max(depth, self.maxDepth)
 
-			actionHistory = newActionHistory
-			currentState.setToNextState(newAction, player)
-			explored.add(newActionHistory)
+			
+			if newActionHistory in self.tree:
+				lastNodeKey = newActionHistory
 			
 			player = HexPlayer.OPPONENT(player)
 
 			if currentState.isGoalState():
 				break
 		
-		AMAF = generateAMAFBackwardPropagation(set(self.tree)&explored, minActionNum) & set(self.tree)
+		#print(lastNodeKey)
+		AMAF = generateAMAFBackwardPropagation(lastNodeKey, minActionNum) & set(self.tree)
 		
-		#print(AMAF-explored)
+		#print(AMAF-set(lastNodeKey))
 		reward = currentState.getReward(firstPlayer)
 		for path in AMAF:
 			self.tree[path].update(reward)
