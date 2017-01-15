@@ -358,22 +358,23 @@ class MonteCarloTree():
 	def deleteSubtree(self, node):
 '''
 
-def generateAMAFBackwardPropagation(actionHistory, sizeThreshold):
+def generateAMAFBackwardPropagation(explored, sizeThreshold):
 	#print(explored)
 	AMAF = set()
-	blackHistory = actionHistory[0]
-	blackNum = len(blackHistory)
-	whiteHistory = actionHistory[1]
-	whiteNum = len(whiteHistory)
-	for i in range(blackNum+1):
-		for j in range(whiteNum+1):
-			if i + j < sizeThreshold:
-				continue
-			b = (itertools.combinations(blackHistory, i))
-			w = (itertools.combinations(whiteHistory, j))
-			for x in b:
-				for y in w:
-					AMAF.add( (frozenset(x),frozenset(y)) )
+	for actionHistory in explored:
+		blackHistory = actionHistory[0]
+		blackNum = len(blackHistory)
+		whiteHistory = actionHistory[1]
+		whiteNum = len(whiteHistory)
+		for i in range(blackNum+1):
+			for j in range(whiteNum+1):
+				if i + j <= sizeThreshold:
+					continue
+				b = (itertools.combinations(blackHistory, i))
+				w = (itertools.combinations(whiteHistory, j))
+				for x in b:
+					for y in w:
+						AMAF.add( (frozenset(x),frozenset(y)) )
 
 	return AMAF
 
@@ -488,6 +489,7 @@ class MonteCarloSearchAgent(Agent):
 		# variable lookup instead of an attribute access each loop.
 		
 		lastNodeKey = None
+		explored = set()
 		#print(gameState)
 		currentState = gameState.copy()
 
@@ -512,7 +514,7 @@ class MonteCarloSearchAgent(Agent):
 			#print(actionPath)
 			#print(time.time()-begin)
 			#print(legalActions)
-			if depth == 1:
+			if depth == -1:
 				actions = currentState.getGoodActions()
 			else:
 				actions = self.getReflexActions(currentState)
@@ -549,9 +551,11 @@ class MonteCarloSearchAgent(Agent):
 				self.tree[ newActionHistory ] = MonteCarloNode( self.evaluationFunction(currentState, firstPlayer) )
 				self.maxDepth = max(depth, self.maxDepth)
 
-			
+			'''
 			if newActionHistory in self.tree:
 				lastNodeKey = newActionHistory
+			'''
+			explored.add(newActionHistory)
 			
 			player = HexPlayer.OPPONENT(player)
 
@@ -559,8 +563,8 @@ class MonteCarloSearchAgent(Agent):
 				break
 		
 		#print(lastNodeKey)
-		AMAF = generateAMAFBackwardPropagation(lastNodeKey, minActionNum) & set(self.tree)
-		print(AMAF)
+		AMAF = generateAMAFBackwardPropagation(set(self.tree)&explored, minActionNum) & set(self.tree)
+		print(len(AMAF))
 		#print(AMAF-set(lastNodeKey))
 		reward = currentState.getReward(firstPlayer)
 		for path in AMAF:
