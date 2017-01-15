@@ -5,7 +5,7 @@ from abc import ABCMeta, abstractmethod
 from math import log, sqrt
 from collections import defaultdict
 import networkx as nx
-from hex import HexState 
+from hex import HexPlayer
 
 class Agent:
 	def __init__(self, player):
@@ -316,11 +316,18 @@ class MonteCarloNode(object):
 	def getScore(self):
 		return self.value / (self.visits or 1)
 
+def appendActionHistory(actionHistory, action, player):
+	if player == HexPlayer.BLACK:
+		return (actionHistory[0] | frozenset({action}), actionHistory[1]) 
+	elif player == HexPlayer.WHITE:
+		return (actionHistory[0], frozenset({action}) | actionHistory[1])
+
+
 class MonteCarloSearchAgent(Agent):
 
 	def __init__(self, player, **kwargs):
 		super(MonteCarloSearchAgent, self).__init__(player)
-		self.simulationTimeLimit = float(kwargs.get('time', 30))
+		self.simulationTimeLimit = float(kwargs.get('time', 3))
 		# self.simulationActionsLimit = int(kwargs.get('max_actions', 1000))
 		# Exploration constant, increase for more exploratory actions,
 		# decrease to prefer actions with known higher win rates.
@@ -335,12 +342,12 @@ class MonteCarloSearchAgent(Agent):
 		assert not gameState.isGoalState()
 
 		self.maxDepth = 0
-		legalActions = gameState.getLegalActions()
-		for a in self.searchActions - set(legalActions):
-			for n in list(self.tree):
-				if a in n[0] or a in n[1]:
-					del self.tree[n]
-		self.searchActions = set(legalActions.copy())
+		print(self.tree)
+
+		for n in list(self.tree):
+			if len(n[0]) + len(n[1]) <= gameState.getAlreadyPlayedActionsNum():
+				del self.tree[n]
+
 		#print(self.searchActions)
 
 		simulationCount = 0
@@ -356,16 +363,17 @@ class MonteCarloSearchAgent(Agent):
 		print('Time elapsed:', time.time() - beginTime)
 
 		player = gameState.nextPlayer
+		actionHistory = gameState.actionHistory
 
 		for a in gameState.getGoodActions():
-			t = (frozenset({a}), frozenset())
+			t = appendActionHistory(actionHistory, a, player)
 			if t in self.tree:
 				print(a, self.tree[t])
 		#print(self.tree)
-		bestAction = max( [ action for action in gameState.getGoodActions() if (frozenset({action}), frozenset()) in self.tree ], 
-				key=lambda x: self.tree[ (frozenset({x}), frozenset()) ].getScore())
+		bestAction = max( [ action for action in gameState.getGoodActions() if appendActionHistory(actionHistory, action, player) in self.tree ], 
+				key=lambda x: self.tree[ appendActionHistory(actionHistory, x, player) ].getScore())
 
-		print('Average reward:', self.tree[ (frozenset({bestAction}), frozenset()) ].getScore())
+		print('Average reward:', self.tree[ appendActionHistory(actionHistory, bestAction, player) ].getScore())
 
 		return bestAction
 
@@ -386,84 +394,68 @@ class MonteCarloSearchAgent(Agent):
 		firstPlayer = self.player
 		secondPlayer = self.opponent
 		player = firstPlayer
-		actionPath = (gameState.actionHistory[firstPlayer], gameState.actionHistory[secondPlayer])
 
-		board = gameState.board
+		# Action Path ( BLACK, WHITE )
+		actionHistory = currentState.actionHistory
+
+		
 		#maxActionNum = len(legalActions)
 		#print(maxActionNum)
 
 		begin = time.time()
 		while True:
-			begin = time.time()
+			
 			depth += 1
 			#print(actionPath)
 			#print(time.time()-begin)
 			#print(legalActions)
-			'''
-			if player == firstPlayer:
-				nextActionPaths = [ (actionPath[0] | frozenset({action}), actionPath[1]) for action in currentState.getGoodActions()]
-			elif player == secondPlayer:
-				nextActionPaths = [ (actionPath[0], frozenset({action}) | actionPath[1]) for action in currentState.getGoodActions()]
-			'''
-			print('a',time.time()-begin)
-			goodActions = currentState.getGoodActions()
-			print(time.time()-begin)
-			nextBoards = [ HexState.getNextBoardHashKey(board, action, player) for action in goodActions]
-			print('x',time.time()-begin)
-			#print(time.time()-begin)
-			#print(time.time()-begin)
-			if all( nextBoard in self.tree for nextBoard in nextBoards):
-				# UCB1
-				logSum = log( 
-					sum( 
-						self.tree[ nextBoard ].visits \
-						for nextBoard in nextBoards 
-					) or 1 
-				)
-				newActionIndex = argmax( 
-					[ nextBoard for nextBoard in nextBoards ], 
-					key=lambda x: self.tree[ x ].getScore() + \
-					self.C * sqrt(logSum / (self.tree[x].visits or 1)) 
-				)
-				newAction = goodActions[newActionIndex]
-			else:
-				newAction = random.choice(goodActions)
-			print(time.time()-begin)
-			
-			#print(newAction)
-			
-			'''
-			if player == firstPlayer:
-				newAction = list(newActionPath[0] - actionPath[0])[0]
-				#player = secondPlayer
-			elif player == secondPlayer:
-				newAction = list(newActionPath[1] - actionPath[1])[0]
-				#player = firstPlayer
-			'''
+			#goodActions = currentState.goodActions()
 
-			#actionPath = newActionPath
-			currentState.setToNextState(newAction, player)
-			print('e',time.time()-begin)
-			if expand and currentState not in self.tree:
-				expand = False
-				self.tree[ currentState ] = MonteCarloNode()
-				self.maxDepth = max(depth, self.maxDepth)
-			explored.add(currentState)
-			print(time.time()-begin)
+			if player == HexPlayer.BLACK:
+				nextActionHistories = [ (actionHistory[0] | frozenset({action}), actionHistory[1]) for action in currentState.getGoodActions()]
+			elif player == HexPlayer.WHITE:
+				nextActionHistories = [ (actionHistory[0], frozenset({action}) | actionHistory[1]) for action in currentState.getGoodActions()]
 			
-			if player == firstPlayer:
-				player = secondPlayer
-			elif player == secondPlayer:
-				player = firstPlayer
+			
+			#print(time.time()-begin)
+			#print(time.time()-begin)
+			if all( nextActionHistory in self.tree for nextActionHistory in nextActionHistories):
+				# UCB1
+				logSum = log( sum( self.tree[ nextActionHistory ].visits for nextActionHistory in nextActionHistories ) or 1 )
+				newActionHistory = max( [ nextActionHistory for nextActionHistory in nextActionHistories ], 
+					key=lambda x: self.tree[x].getScore() + self.C * sqrt(logSum / (self.tree[x].visits or 1)) )
+			else:
+				newActionHistory = random.choice(nextActionHistories)
+
+			
+			#print(newActionPath)
+			
+			if player == HexPlayer.BLACK:
+				newAction = list(newActionHistory[0] - actionHistory[0])[0]
+				#player = secondPlayer
+			elif player == HexPlayer.WHITE:
+				newAction = list(newActionHistory[1] - actionHistory[1])[0]
+				#player = firstPlayer
+			
+
+			actionHistory = newActionHistory
+			currentState.setToNextState(newAction, player)
+
+			if expand and newActionHistory not in self.tree:
+				expand = False
+				self.tree[ newActionHistory ] = MonteCarloNode()
+				self.maxDepth = max(depth, self.maxDepth)
+			explored.add(newActionHistory)
+			
+			player = HexPlayer.OPPONENT(player)
 
 			if currentState.isGoalState():
 				break
-		print(time.time()-begin)
+		
 		reward = currentState.getReward(firstPlayer)
 		for path in explored:
 			if path in self.tree:
 				self.tree[path].update(reward)
-		print(time.time()-begin)
 		return reward
 
 

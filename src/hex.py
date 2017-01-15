@@ -139,10 +139,7 @@ class HexState:
 		self.board = {}
 		self.legalActions = []
 		self.goodActions = []
-		self.actionHistory = {
-			HexPlayer.BLACK: frozenset(),
-			HexPlayer.WHITE: frozenset()
-		}
+		self.actionHistory = ( frozenset(), frozenset() )
 
 		for x in range(N):
 			for y in range(N):
@@ -234,7 +231,12 @@ class HexState:
 		self.lastAction = action
 		self.legalActions.remove(action)
 		self.goodActions.remove(action)
-		self.actionHistory[player] |= frozenset({player})
+		
+		if player == HexPlayer.BLACK:
+			self.actionHistory = (self.actionHistory[0] | frozenset({action}), self.actionHistory[1])
+		elif player == HexPlayer.WHITE:
+			self.actionHistory = (self.actionHistory[0] , frozenset({action}) | self.actionHistory[1])
+
 		self.board[action] = player
 		self.nextPlayer = 3-player
 		opponent = 3-player
