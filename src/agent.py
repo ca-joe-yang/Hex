@@ -392,7 +392,7 @@ class MonteCarloSearchAgent(Agent):
 
 	def __init__(self, player, **kwargs):
 		super(MonteCarloSearchAgent, self).__init__(player)
-		self.simulationTimeLimit = float(kwargs.get('time', 45))
+		self.simulationTimeLimit = float(kwargs.get('time', 40))
 		# self.simulationActionsLimit = int(kwargs.get('max_actions', 1000))
 		# Exploration constant, increase for more exploratory actions,
 		# decrease to prefer actions with known higher win rates.
@@ -464,10 +464,13 @@ class MonteCarloSearchAgent(Agent):
 		player = gameState.nextPlayer
 		actionHistory = gameState.actionHistory
 
+		v = 0
 		for a in gameState.getGoodActions():
 			t = appendActionHistory(actionHistory, a, player)
 			if t in self.tree:
+				v += self.tree[t].visits
 				print(a, self.tree[t])
+		print(v)
 		#print(self.tree)
 		bestAction = max( [ action for action in gameState.getGoodActions() if appendActionHistory(actionHistory, action, player) in self.tree ], 
 				key=lambda x: self.tree[ appendActionHistory(actionHistory, x, player) ].getScore())
@@ -557,7 +560,7 @@ class MonteCarloSearchAgent(Agent):
 		
 		#print(lastNodeKey)
 		AMAF = generateAMAFBackwardPropagation(lastNodeKey, minActionNum) & set(self.tree)
-		
+		print(AMAF)
 		#print(AMAF-set(lastNodeKey))
 		reward = currentState.getReward(firstPlayer)
 		for path in AMAF:
