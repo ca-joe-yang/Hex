@@ -827,6 +827,26 @@ class HexState:
 				return False
 		return True
 
+	@staticmethod
+	def getPossibleBridges(board, player):
+		actions = []
+		for cell in board:
+			if board[cell] != player:
+				continue
+			cx, cy = cell
+			for i in range(6):
+				j = (i+1) % 6
+				dx1, dy1 = HexState.NEIGHBORNG_DIRECTION[i]
+				dx2, dy2 = HexState.NEIGHBORNG_DIRECTION[j]
+				river1 = (cx + dx1, cy + dy1)
+				river2 = (cx + dx2, cy + dy2)
+				bridge = (cx + dx1 + dx2, cy + dy1 + dy2)
+				if river1 in board and board[river1] == 0 and \
+					river2 in board and board[river2] == 0 and \
+					bridge in board and board[bridge] == 0:
+					actions.append(bridge)
+		return actions
+
 
 class HexBoard():
 

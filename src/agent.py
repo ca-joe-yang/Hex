@@ -45,9 +45,22 @@ class Agent:
 			return gameState.bridgePairs[self.player][gameState.lastAction]
 		return gameState.getGoodActions()	
 
-	def getAttackActions(self, gameState):
-		graph = gameState.shannonGraphs[self.player]
-		paths = nx.all_shortest_paths(graph, HexState.TARGET_CELL[self.player][0], HexState.TARGET_CELL[self.player][1])
+	def getAttackActions(self, gameState, player):
+		graph = gameState.shannonGraphs[player]
+		paths = nx.all_shortest_paths(graph, HexState.TARGET_CELL[player][0], HexState.TARGET_CELL[player][1])
+
+		actions = set()
+		for p in paths:
+			actions |= set(p)
+		goodActions = gameState.getGoodActions()
+		actions &= set(goodActions)
+		actions |= set(HexState.getPossibleBridges(gameState.board, player))
+		return list(actions)
+
+	def getDefenseActions(self, gameState, player):
+		opponent = HexPlayer.OPPONENT(player)
+		graph = gameState.shannonGraphs[opponent]
+		paths = nx.all_shortest_paths(graph, HexState.TARGET_CELL[opponent][0], HexState.TARGET_CELL[opponent][1])
 
 		actions = set()
 		for p in paths:
@@ -57,17 +70,6 @@ class Agent:
 
 		return list(actions)
 
-	def getDefenseActions(self, gameState):
-		graph = gameState.shannonGraphs[self.opponent]
-		paths = nx.all_shortest_paths(graph, HexState.TARGET_CELL[self.opponent][0], HexState.TARGET_CELL[self.opponent][1])
-
-		actions = set()
-		for p in paths:
-			actions |= set(p)
-		goodActions = gameState.getGoodActions()
-		actions &= set(goodActions)
-
-		return list(actions)
 
 	def evaluationFunction(self, gameState, player):
 		'''
@@ -225,7 +227,7 @@ class OnlyAttackAgent(Agent):
 		super(OnlyAttackAgent, self).__init__(player)
 
 	def getAction(self, gameState):
-		return random.choice(self.getAttackActions(gameState))
+		return random.choice(self.getAttackActions(gameState, self.player))
 
 class OnlyDefenseAgent(Agent):
 
@@ -233,7 +235,7 @@ class OnlyDefenseAgent(Agent):
 		super(OnlyDefenseAgent, self).__init__(player)
 
 	def getAction(self, gameState):
-		return random.choice(self.getDefenseActions(gameState))
+		return random.choice(self.getDefenseActions(gameState, self.player))
 
 class HumanAgent(Agent):
 
@@ -331,10 +333,10 @@ class MonteCarloNode(object):
 		#self.children = []
 
 	def __str__(self):
-		return('{ value: ' + str(self.value) + ', visits: ' + str(self.visits) + '}')
+		return('{ value: ' + str(self.value) + ', visits: ' + str(self.visits) + ', average: ' + str(self.getAverageValue()) + '}')
 
 	def __repr__(self):
-		return('{ value: ' + str(self.value) + ', visits: ' + str(self.visits) + '}')
+		return('{ value: ' + str(self.value) + ', visits: ' + str(self.visits) + ', average: ' + str(self.getAverageValue()) + '}')
 
 	def update(self, reward):
 		self.visits += 1
@@ -410,7 +412,7 @@ class MonteCarloSearchAgent(Agent):
 		with open(self.dataFilename, 'wb') as f:
 			#print (self.tree)
 			#print (f)
-			pickle.dump(self.tree, f)
+			pickle.dump(self.tree, f, protocol=4)
 
 	def _loadTree(self):
 		try:
@@ -432,10 +434,10 @@ class MonteCarloSearchAgent(Agent):
 			beginTime = time.time()
 			while time.time() - beginTime < self.simulationTimeLimit:
 				simulationCount += 1
-				print('Simulation', simulationCount, end=' ')
 				reward = self.runSimulation(gameState)
-				print(', reward:', reward)
+				print('Simulation', simulationCount, ', reward:', reward, '  ', end='\r')
 
+			print()
 			print('Simulation counts:', simulationCount)
 			print('Search max depth:', self.maxDepth)
 			print('Time elapsed:', time.time() - beginTime)
@@ -493,7 +495,7 @@ class MonteCarloSearchAgent(Agent):
 			else:
 				actions = self.getReflexActions(currentState)
 				if len(actions) == 0:
-					return list(set(self.getAttackActions(currentState) + self.getDefenseActions(currentState)))
+					return list(set(self.getAttackActions(currentState, player) + self.getDefenseActions(currentState, player)))
 
 			#if board in self.tree:
 			playOutPath.append((board, player))
@@ -554,7 +556,7 @@ class MonteCarloSearchAgent(Agent):
 		if HexState.BOARD_SIZE > 6:
 			for i in range(len(playOutPath)):
 				b, p = playOutPath[i]
-				if i < HexState.BOARD_SIZE-7:
+				if i < HexState.BOARD_SIZE-6:
 					for a in actionPath:
 						if a == actionPath[0]:
 							continue
