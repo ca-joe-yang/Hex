@@ -60,7 +60,8 @@ class Agent:
         notNeighborActions = []
         for a in actions:
             if not a in HexState.getNeighbors(gameState.board, list(gameState.actionHistory[self.player-1])):
-                notNeighborActions.append(a)
+                if not a in HexState.getNeighbors(gameState.board, gameState.getBorder()):
+                    notNeighborActions.append(a)
         if len(notNeighborActions) != 0:
             return notNeighborActions
         else:
