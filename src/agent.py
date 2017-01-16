@@ -409,8 +409,8 @@ class MonteCarloSearchAgent(Agent):
 		#self.tree = MonteCarloTree()
 
 	def __del__(self):
-		pass
-		#self._saveTree()
+		#pass
+		self._saveTree()
 
 	def _saveTree(self):
 		'''
@@ -485,7 +485,7 @@ class MonteCarloSearchAgent(Agent):
 				key=lambda x: self.tree[ HexState.convertBoard2BoardStr(gameState.getNextState(x, player).board) ].getScore())
 
 		print('Average reward:', self.tree[ HexState.convertBoard2BoardStr(gameState.getNextState(bestAction, player).board) ].getScore())
-		self._saveTree()
+		#self._saveTree()
 		return bestAction
 
 	def runSimulation(self, gameState):
