@@ -471,14 +471,14 @@ class MonteCarloSearchAgent(Agent):
 		actionHistory = gameState.actionHistory
 		actions = self.getReflexActions(gameState)
 
-		print(self.tree)
+		#print(self.tree)
 		v = 0
 		for action in actions:
 			t = HexState.convertBoard2BoardStr(gameState.getNextState(action, player).board)
 			if t in self.tree:
 				v += self.tree[t].visits
 				print(action, self.tree[t])
-		print(v)
+		#print(v)
 		#print(self.tree)
 		bestAction = max( [ action for action in actions if HexState.convertBoard2BoardStr(gameState.getNextState(action, player).board) in self.tree ], 
 				key=lambda x: self.tree[ HexState.convertBoard2BoardStr(gameState.getNextState(x, player).board) ].getScore())
