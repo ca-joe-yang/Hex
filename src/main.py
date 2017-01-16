@@ -2,16 +2,21 @@ import numpy as np
 from agent import *
 from hex import HexEnv
 
-episodeNum = 5
+episodeNum = 1
+N = 6
 
-timeout = 60
-env = HexEnv(11, True)
+timeout = 30
+env = HexEnv(N, True)
 
-blackAgent = AlphaBetaSearchAgent(1)
-blackAgent = MonteCarloSearchAgent(1, filename='data/Hex_11x11_Black.pkl', time=timeout)
+blackData = 'data/Hex_'+str(N)+'x'+str(N)+'_Black.pkl'
+whiteData = 'data/Hex_'+str(N)+'x'+str(N)+'_White.pkl'
+
+#blackAgent = AlphaBetaSearchAgent(1)
+blackAgent = MonteCarloSearchAgent(1, filename=blackData, time=timeout, mode='train')
 #blackAgent = HumanAgent(1)
 #blackAgent = RandomAgent(1)
-whiteAgent = MonteCarloSearchAgent(2, filename='data/Hex_11x11_White.pkl', time=timeout)
+whiteAgent = HumanAgent(2)
+#whiteAgent = MonteCarloSearchAgent(2, filename=whiteData, time=timeout, mode='train')
 #whiteAgent = ReflexAgent(2)
 #whiteAgent = BetterRandomAgent(2)
 env.setPlayerAgent(1, blackAgent)

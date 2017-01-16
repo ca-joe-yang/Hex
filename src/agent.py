@@ -329,6 +329,9 @@ class MonteCarloNode(object):
 	def __str__(self):
 		return('{ value: ' + str(self.value) + ', visits: ' + str(self.visits) + '}')
 
+	def __repr__(self):
+		return('{ value: ' + str(self.value) + ', visits: ' + str(self.visits) + '}')
+
 	def update(self, reward):
 		self.visits += 1
 		self.value += reward
@@ -337,7 +340,10 @@ class MonteCarloNode(object):
 		return self.value / (self.visits or 1)
 
 	def getProgressiveBias(self):
-		return (self.heuristic+self.value) / (self.visits or 1)
+		if self.visits >= 10:
+			return (self.heuristic+self.value) / (self.visits or 1)
+		else:
+			return self.getScore()
 
 	def getBestChild(self):
 		pass
@@ -401,8 +407,8 @@ class MonteCarloSearchAgent(Agent):
 		# Exploration constant, increase for more exploratory actions,
 		# decrease to prefer actions with known higher win rates.
 		self.C = float(kwargs.get('C', 1.4))
-		self.searchActions = set()
 		self.dataFilename = kwargs.pop('filename')
+		self.mode = kwargs.pop('mode')
 		self.tree = self._loadTree()
 		#print(self.tree)
 		#defaultdict(MonteCarloNode)
@@ -410,20 +416,10 @@ class MonteCarloSearchAgent(Agent):
 
 	def __del__(self):
 		#pass
-		self._saveTree()
+		if self.mode == 'train':
+			self._saveTree()
 
 	def _saveTree(self):
-		'''
-		tree = {}
-		for n in self.tree:
-			key = HexState.convertActionHistory2BoardStr(n)
-			tree[key] = {
-				'heuristic': self.tree[n].heuristic,
-				'value': self.tree[n].value,
-				'visits': self.tree[n].visits,
-			}
-		#print(tree)
-		'''
 		with open(self.dataFilename, 'wb') as f:
 			pickle.dump(self.tree, f)
 
@@ -431,11 +427,6 @@ class MonteCarloSearchAgent(Agent):
 		try:
 			with open(self.dataFilename, 'rb') as f:
 				return pickle.load(f)
-			'''
-			for n in tree:
-				key = HexState.convertBoardStr2ActionHistory(n)
-				x[key] = MonteCarloNode(tree[n]['heuristic'], tree[n]['value'], tree[n]['visits'])
-			'''
 		except:
 			return {}
 
@@ -446,27 +437,21 @@ class MonteCarloSearchAgent(Agent):
 		assert not gameState.isGoalState()
 
 		self.maxDepth = 0
-		#print(self.tree)
-
-		'''
-		for n in list(self.tree):
-			if len(n[0]) + len(n[1]) <= gameState.getAlreadyPlayedActionsNum():
-				del self.tree[n]
-		'''
 
 		#print(self.searchActions)
 
 		simulationCount = 0
-		beginTime = time.time()
-		while time.time() - beginTime < self.simulationTimeLimit:
-			simulationCount += 1
-			print('Simulation', simulationCount, end=' ')
-			reward = self.runSimulation(gameState)
-			print(', reward:', reward)
+		if self.mode == 'train':
+			beginTime = time.time()
+			while time.time() - beginTime < self.simulationTimeLimit:
+				simulationCount += 1
+				print('Simulation', simulationCount, end=' ')
+				reward = self.runSimulation(gameState)
+				print(', reward:', reward)
 
-		print('Simulation counts:', simulationCount)
-		print('Search max depth:', self.maxDepth)
-		print('Time elapsed:', time.time() - beginTime)
+			print('Simulation counts:', simulationCount)
+			print('Search max depth:', self.maxDepth)
+			print('Time elapsed:', time.time() - beginTime)
 
 		player = gameState.nextPlayer
 		actionHistory = gameState.actionHistory
@@ -474,8 +459,9 @@ class MonteCarloSearchAgent(Agent):
 
 		#print(self.tree)
 		v = 0
+		#print(self.tree)
 		for action in actions:
-			t = HexState.convertBoard2BoardStr(gameState.getNextState(action, player).board)
+			t = HexState.generateNextBoard(HexState.convertBoard2BoardStr(gameState.board), action, player)
 			if t in self.tree:
 				v += self.tree[t].visits
 				print(action, self.tree[t])
@@ -514,18 +500,19 @@ class MonteCarloSearchAgent(Agent):
 		initBoard = HexState.convertBoard2BoardStr(currentState.board)
 		board = initBoard
 		playOutPath = []
+		actionPath = []
 		
 		begin = time.time()
 		while True:
 			
 			depth += 1
-			if depth == -1:
+			if depth == 1:
 				actions = currentState.getGoodActions()
 			else:
 				actions = self.getReflexActions(currentState)
 
-			if board in self.tree:
-				playOutPath.append(board)
+			#if board in self.tree:
+			playOutPath.append((board, player))
 
 			player = currentState.nextPlayer
 			nextBoards = [ HexState.generateNextBoard(board, action, player) for action in actions ]
@@ -588,10 +575,12 @@ class MonteCarloSearchAgent(Agent):
 			'''
 			
 			board = newBoard
-			
+			actionPath.append(newAction)
+
 			player = HexPlayer.OPPONENT(player)
 
 			if currentState.isGoalState():
+				playOutPath.append((board, player))
 				break
 		
 		#print(lastNodeKey)
@@ -603,33 +592,36 @@ class MonteCarloSearchAgent(Agent):
 		#newActions = HexState.getAllNewActionsFromBoards(initBoard, board)
 		#print(newActions)
 		reward = currentState.getReward(firstPlayer)
-		for b in self.tree:
+		#for b in self.tree:
+		#if b in playOutPath:
+		#self.tree[b].update(reward)
+		'''
 			if b == initBoard:
 				continue
 			if HexState.isBoardBeforeEndBoard(initBoard, b) and HexState.isBoardBeforeEndBoard(b, endBoard):
-				self.tree[b].update(reward)			
+				self.tree[b].update(reward)
+		'''
+
+		#print(playOutPath)
+		#print(actionPath)
+
+		# AMAF
+		if HexState.BOARD_SIZE > 5:
+			for i in range(len(playOutPath)):
+				b, p = playOutPath[i]
+				if i < HexState.BOARD_SIZE-5:
+					for a in actionPath:
+						if a == actionPath[0]:
+							continue
+						sibling = HexState.generateNextBoard(b, a, p)
+						if sibling in self.tree:
+							self.tree[sibling].update(reward)
+					if len(actionPath) > 0:
+						actionPath.remove(actionPath[0])
+
+
+		for b, p in playOutPath:
+			if b in self.tree:
+				self.tree[b].update(reward)
 		return reward
-
-
-
-		
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

@@ -51,6 +51,8 @@ class HexEnv():
 
 
 	def autoPlay(self):
+		if self.verbose:
+			self.render()
 		while not self.gameState.isGoalState():
 			gameState = self.gameState
 			player = gameState.nextPlayer
