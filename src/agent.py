@@ -396,7 +396,7 @@ class MonteCarloSearchAgent(Agent):
 
 	def __init__(self, player, **kwargs):
 		super(MonteCarloSearchAgent, self).__init__(player)
-		self.simulationTimeLimit = float(kwargs.get('time', 20))
+		self.simulationTimeLimit = float(kwargs.get('time', 60))
 		# self.simulationActionsLimit = int(kwargs.get('max_actions', 1000))
 		# Exploration constant, increase for more exploratory actions,
 		# decrease to prefer actions with known higher win rates.

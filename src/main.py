@@ -4,7 +4,7 @@ from hex import HexEnv
 
 episodeNum = 1
 
-env = HexEnv(9, True)
+env = HexEnv(20, True)
 
 blackAgent = AlphaBetaSearchAgent(1)
 blackAgent = MonteCarloSearchAgent(1, filename='data/Hex_9x9_Black.pkl')
