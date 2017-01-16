@@ -4,13 +4,13 @@ from hex import HexEnv
 
 episodeNum = 1
 
-env = HexEnv(7, True)
+env = HexEnv(9, True)
 
 blackAgent = AlphaBetaSearchAgent(1)
-blackAgent = MonteCarloSearchAgent(1)
+blackAgent = MonteCarloSearchAgent(1, filename='data/Hex_9x9_Black.pkl')
 #blackAgent = HumanAgent(1)
 #blackAgent = RandomAgent(1)
-whiteAgent = HumanAgent(2)
+whiteAgent = MonteCarloSearchAgent(1, filename='data/Hex_9x9_White.pkl')
 #whiteAgent = ReflexAgent(2)
 #whiteAgent = BetterRandomAgent(2)
 env.setPlayerAgent(1, blackAgent)

@@ -709,7 +709,7 @@ class HexState:
 		assert len(boardStr) == HexState.BOARD_SIZE**2
 		for i in range(len(boardStr)):
 			cell = int(boardStr[i])
-			pos = (int(i/7)+1, int(i%7)+1)
+			pos = (int(i/N)+1, int(i%N)+1)
 			if cell == HexPlayer.BLACK:
 				blackHistory.add(pos)
 			elif cell == HexPlayer.WHITE:
@@ -735,6 +735,101 @@ class HexState:
 
 
 
+	@staticmethod
+	def convertBoard2BoardStr(board):
+		N = HexState.BOARD_SIZE
+		boardStrList = ['0']* (N**2)
+		for x in range(N):
+			for y in range(N):
+				boardStrList[y+N*x] = str(board[(x+1,y+1)])
+		boardStr = ','.join(boardStrList)
+		return boardStr
+
+	@staticmethod
+	def convertBoardStr2Board(boardStr):
+		N = HexState.BOARD_SIZE
+		boardStrList = boardStr.split(',')
+		assert len(boardStrList) == N**2
+
+		board = {}
+		for i in range(N):
+			board[(i+1, 0)] = HexPlayer.BLACK
+			board[(i+1, N+1)] = HexPlayer.BLACK
+			board[(0, i+1)] = HexPlayer.WHITE
+			board[(N+1, i+1)] = HexPlayer.WHITE
+
+		for x in range(N):
+			for y in range(N):
+				board[(x+1, y+1)] = boardStrList[y+N*x]
+		return board
+
+	@staticmethod
+	def generateNextBoard(boardStr, action, player):
+		N = HexState.BOARD_SIZE
+		boardStrList = boardStr.split(',')
+		assert len(boardStrList) == N**2
+
+		x = action[0]
+		y = action[1]
+
+		boardStrList[(y-1)+N*(x-1)] = str(player)
+
+		return ','.join(boardStrList)
+
+	@staticmethod
+	def getNewActionFromBoards(oldBoard, newBoard):
+		N = HexState.BOARD_SIZE
+		oldBoardStrList = oldBoard.split(',')
+		newBoardStrList = newBoard.split(',')
+		assert len(oldBoardStrList) == N**2
+		assert len(newBoardStrList) == N**2
+
+		for i in range(N**2):
+			if oldBoardStrList[i] != newBoardStrList[i]:
+				pos = (int(i/N)+1, int(i%N)+1)
+				return pos, int(newBoardStrList[i])
+		print(oldBoard, newBoard)
+		raise
+
+	@staticmethod
+	def getAllNewActionFromBoards(oldBoard, newBoard):
+		N = HexState.BOARD_SIZE
+		oldBoardStrList = oldBoard.split(',')
+		newBoardStrList = newBoard.split(',')
+		assert len(oldBoardStrList) == N**2
+		assert len(newBoardStrList) == N**2
+
+		newActions = {
+			HexPlayer.BLACK: [],
+			HexPlayer.WHITE: [],
+		}
+		for i in range(N**2):
+			assert oldBoardStrList[i] == newBoardStrList[i] or oldBoardStrList[i] == '0'
+			if oldBoardStrList[i] != newBoardStrList[i]:
+				pos = (int(i/N)+1, int(i%N)+1)
+				newActions[int(newBoardStrList[i])].append(pos)
+		return newActions
+		print(oldBoard, newBoard)
+		raise
+
+	@staticmethod
+	def isBoardBeforeEndBoard(oldBoard, newBoard):
+		N = HexState.BOARD_SIZE
+		oldBoardStrList = oldBoard.split(',')
+		newBoardStrList = newBoard.split(',')
+		assert len(oldBoardStrList) == N**2
+		assert len(newBoardStrList) == N**2
+
+		for i in range(N**2):
+			if oldBoardStrList[i] != newBoardStrList[i] and oldBoardStrList[i] != '0':
+				return False
+		return True
+
+
+class HexBoard():
+
+	def __init__(self):
+		pass
 
 
 def isNeighbor(coordinate1, coordinate2):
