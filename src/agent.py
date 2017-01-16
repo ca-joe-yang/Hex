@@ -443,6 +443,8 @@ class MonteCarloSearchAgent(Agent):
 
     def _saveTree(self):
         with open(self.dataFilename, 'wb') as f:
+            print (self.tree)
+            print (f)
             pickle.dump(self.tree, f)
 
     def _loadTree(self):
