@@ -1,9 +1,10 @@
 import numpy as np
 from agent import *
 from hex import HexEnv
+import sys
 
-episodeNum = 5
-N = 8
+N = sys.argv[1]
+episodeNum = sys.argv[2]
 
 timeout = 30
 env = HexEnv(N, True)
