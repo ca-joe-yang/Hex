@@ -9,6 +9,8 @@ from hex import HexPlayer, HexState
 import itertools
 import _pickle as pickle
 
+
+
 class Agent:
 	def __init__(self, player):
 		self.player = player
