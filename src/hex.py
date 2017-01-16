@@ -833,6 +833,10 @@ class HexBoard():
 	def __init__(self):
 		pass
 
+def H_Search(board):
+	N = HexState.BOARD_SIZE
+	pass
+
 
 def isNeighbor(coordinate1, coordinate2):
 	x1, y1 = coordinate1
