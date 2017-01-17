@@ -3,8 +3,8 @@ from agent import *
 from hex import HexEnv
 import sys
 
-N = sys.argv[1]
-episodeNum = sys.argv[2]
+N = int(sys.argv[1])
+episodeNum = int(sys.argv[2])
 
 timeout = 30
 env = HexEnv(N, True)
