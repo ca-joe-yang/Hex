@@ -376,14 +376,14 @@ class MonteCarloNode(object):
 
 	'''
 	def addChildNode(self, node):
-		try:
-			self.children
-		except:
-			self.children = []
-		self.children.append(node)
+	try:
+	self.children
+	except:
+	self.children = []
+	self.children.append(node)
 
 	def getBestChild(self):
-		pass
+	pass
 	'''
 '''
 class MonteCarloTree():
