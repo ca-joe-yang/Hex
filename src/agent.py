@@ -49,12 +49,14 @@ class Agent:
 	def getMustWinActions(self, gameState, player):
 		graph = gameState.shannonGraphs[player]
 		paths = nx.all_shortest_paths(graph, HexState.TARGET_CELL[player][0], HexState.TARGET_CELL[player][1])
-		actions = set()
+		actions = []
 		for p in paths:
-			if len(p) > 2:
+			#print(p)
+			if len(p) > 3:
 				return []
-			actions.add(p)
-		return list(actions)
+			actions.append(p[1])
+		#print(actions)
+		return actions
 
 	def getAttackActions(self, gameState, player):
 		graph = gameState.shannonGraphs[player]
