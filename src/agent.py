@@ -91,16 +91,6 @@ class Agent:
 
 		return list(actions)
 
-	def getMustWinActions(self):
-		graph = gameState.shannonGraphs[self.player]
-		paths = nx.all_shortest_paths(graph, HexState.TARGET_CELL[self.player][0], HexState.TARGET_CELL[self.player][1])
-		if len(paths[0]) > 2:
-			return None
-		actions = []
-		for p in paths:
-			actions.append(p[0])
-		return actions
-
 	def evaluationFunction(self, gameState, player):
 		'''
 		analysis = gameState.analysis()
@@ -527,7 +517,7 @@ class MonteCarloSearchAgent(Agent):
 			if len(actions) == 0:
 				actions = self.getAttackActions(currentState, player)
 				if gameState.getAlreadyPlayedActionsNum() > 1:
-					actions |= set(self.getDefenseActions(currentState, player))
+					actions = list(set(actions) | set(self.getDefenseActions(currentState, player)))
 			if len(actions) == 0:
 				actions = currentState.getGoodActions()
 			#if board in self.tree:
