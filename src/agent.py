@@ -46,7 +46,7 @@ class Agent:
 			return gameState.bridgePairs[self.player][gameState.lastAction]
 		return gameState.getGoodActions()	
 
-	def getAttackActions(self, gameState):
+	def getAttackActions(self, gameState, player):
 		graph = gameState.shannonGraphs[self.player]
 		paths = nx.all_shortest_paths(graph, HexState.TARGET_CELL[self.player][0], HexState.TARGET_CELL[self.player][1])
 
@@ -67,7 +67,7 @@ class Agent:
 		else:
 			return actions
 
-	def getDefenseActions(self, gameState):
+	def getDefenseActions(self, gameState, player):
 		graph = gameState.shannonGraphs[self.opponent]
 		paths = nx.all_shortest_paths(graph, HexState.TARGET_CELL[self.opponent][0], HexState.TARGET_CELL[self.opponent][1])
 
@@ -78,6 +78,16 @@ class Agent:
 		actions &= set(goodActions)
 
 		return list(actions)
+
+    def getMustWinActions(self):
+		graph = gameState.shannonGraphs[self.player]
+		paths = nx.all_shortest_paths(graph, HexState.TARGET_CELL[self.player][0], HexState.TARGET_CELL[self.player][1])
+        if len(paths[0]) > 2:
+            return None
+        actions = []
+		for p in paths:
+			actions.append(p[0])
+        return actions
 
 	def evaluationFunction(self, gameState, player):
 		'''
@@ -418,7 +428,7 @@ class MonteCarloSearchAgent(Agent):
 		with open(self.dataFilename, 'wb') as f:
 			#print (self.tree)
 			#print (f)
-			pickle.dump(self.tree, f, protocol=4)
+			pickle.dump(self.tree, f)#, protocol=4)
 
 	def _loadTree(self):
 		try:
