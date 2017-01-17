@@ -6,7 +6,7 @@ import sys
 N = int(sys.argv[1])
 episodeNum = int(sys.argv[2])
 
-timeout = 30
+timeout = 0.5
 env = HexEnv(N, True)
 
 blackData = 'data/Hex_'+str(N)+'x'+str(N)+'_Black.pkl'
