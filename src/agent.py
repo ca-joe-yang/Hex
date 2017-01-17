@@ -41,14 +41,24 @@ class Agent:
 		return bestAction
 
 
-	def getReflexActions(self, gameState):
-		if gameState.lastAction in gameState.bridgePairs[self.player]:
-			return gameState.bridgePairs[self.player][gameState.lastAction]
-		return gameState.getGoodActions()	
+	def getReflexActions(self, gameState, player):
+		if gameState.lastAction in gameState.bridgePairs[player]:
+			return gameState.bridgePairs[player][gameState.lastAction]
+		return []	
 
-	def getAttackActions(self, gameState):
-		graph = gameState.shannonGraphs[self.player]
-		paths = nx.all_shortest_paths(graph, HexState.TARGET_CELL[self.player][0], HexState.TARGET_CELL[self.player][1])
+	def getMustWinActions(self, gameState, player):
+		graph = gameState.shannonGraphs[player]
+		paths = nx.all_shortest_paths(graph, HexState.TARGET_CELL[player][0], HexState.TARGET_CELL[player][1])
+		actions = set()
+		for p in paths:
+			if len(p) > 2:
+				return []
+			actions.add(p)
+		return list(actions)
+
+	def getAttackActions(self, gameState, player):
+		graph = gameState.shannonGraphs[player]
+		paths = nx.all_shortest_paths(graph, HexState.TARGET_CELL[player][0], HexState.TARGET_CELL[player][1])
 
 		actions = set()
 		for p in paths:
@@ -57,19 +67,21 @@ class Agent:
 		actions &= set(goodActions)
 		actions = list(actions)
 
-		notNeighborActions = []
-		for a in actions:
-			if not a in HexState.getNeighbors(gameState.board, list(gameState.actionHistory[self.player-1])):
-				if not a in HexState.getNeighbors(gameState.board, gameState.getBorder()):
-					notNeighborActions.append(a)
+		notNeighborActions = [ 
+			a for a in actions \
+			if a not in HexState.getNeighbors(gameState.board, list(gameState.actionHistory[player-1])) \
+			and not gameState.isBorder(a)
+		]
+		#print(notNeighborActions)
 		if len(notNeighborActions) != 0:
 			return notNeighborActions
 		else:
 			return actions
 
-	def getDefenseActions(self, gameState):
-		graph = gameState.shannonGraphs[self.opponent]
-		paths = nx.all_shortest_paths(graph, HexState.TARGET_CELL[self.opponent][0], HexState.TARGET_CELL[self.opponent][1])
+	def getDefenseActions(self, gameState, player):
+		opponent = HexPlayer.OPPONENT(player)
+		graph = gameState.shannonGraphs[opponent]
+		paths = nx.all_shortest_paths(graph, HexState.TARGET_CELL[opponent][0], HexState.TARGET_CELL[opponent][1])
 
 		actions = set()
 		for p in paths:
@@ -226,7 +238,10 @@ class ReflexAgent(Agent):
 		super(ReflexAgent, self).__init__(player)
 
 	def getAction(self, gameState):
-		return self.getReflexAction(gameState)	
+		actions = self.getReflexAction(gameState)
+		if len(actions) != 0:
+			return random.choice(actions)
+		return self.getRandomGoodAction(gameState)	
 
 class OnlyAttackAgent(Agent):
 
@@ -450,7 +465,7 @@ class MonteCarloSearchAgent(Agent):
 
 		player = gameState.nextPlayer
 		actionHistory = gameState.actionHistory
-		actions = self.getReflexActions(gameState)
+		actions = gameState.getGoodActions()
 
 		for action in actions:
 			t = HexState.generateNextBoard(HexState.convertBoard2BoardStr(gameState.board), action, player)
@@ -484,7 +499,7 @@ class MonteCarloSearchAgent(Agent):
 		player = firstPlayer
 
 		# Action Path ( BLACK, WHITE )
-		actionHistory = currentState.actionHistory
+		#actionHistory = currentState.actionHistory
 		minActionNum = currentState.getAlreadyPlayedActionsNum()
 
 		initBoard = HexState.convertBoard2BoardStr(currentState.board)
@@ -496,15 +511,19 @@ class MonteCarloSearchAgent(Agent):
 		while True:
 
 			depth += 1
-			if depth == 1:
+			actions = self.getMustWinActions(currentState, player)
+			if len(actions) == 0:
+				actions = self.getReflexActions(currentState, player)
+			if len(actions) == 0:
+				actions = self.getAttackActions(currentState, player)
+				if gameState.getAlreadyPlayedActionsNum() > 1:
+					actions |= set(self.getDefenseActions(currentState, player))
+			if len(actions) == 0:
 				actions = currentState.getGoodActions()
-			else:
-				actions = self.getReflexActions(currentState)
-				if len(actions) == 0:
-					return list(set(self.getAttackActions(currentState, player) + self.getDefenseActions(currentState, player)))
-
 			#if board in self.tree:
+			actions = list(actions)
 			playOutPath.append((board, player))
+			#print(actions)
 
 			player = currentState.nextPlayer
 			nextBoards = [ HexState.generateNextBoard(board, action, player) for action in actions ]
@@ -562,7 +581,7 @@ class MonteCarloSearchAgent(Agent):
 		if HexState.BOARD_SIZE > 6:
 			for i in range(len(playOutPath)):
 				b, p = playOutPath[i]
-				if i < HexState.BOARD_SIZE-6:
+				if i < HexState.BOARD_SIZE-7 and gameState.getAlreadyPlayedActionsNum()>4:
 					for a in actionPath:
 						if a == actionPath[0]:
 							continue

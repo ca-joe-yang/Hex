@@ -150,6 +150,12 @@ class HexState:
 			HexPlayer.BLACK: {},
 			HexPlayer.WHITE: {},
 		}
+		self.outside = []
+		for i in range(N):
+			self.outside.append((0, i+1))
+			self.outside.append((i+1, 0))
+			self.outside.append((N+1, i+1))
+			self.outside.append((i+1, N+1))
 
 		for x in range(N):
 			for y in range(N):
@@ -414,14 +420,8 @@ class HexState:
 	def getGoodActions(self):
 		return self.goodActions
 
-	def getBorder(self):
-		border = [(0, 0), (0, self.N+1), (self.N+1, 0), (self.N+1, self.N+1)]
-		for i in range(1, self.N+1):
-			border.append((0, i))
-			border.append((i, 0))
-			border.append((self.N+1, i))
-			border.append((i, self.N+1))
-		return border
+	def isBorder(self, action):
+		return action[0] == 1 or action[1] == 1 or action[0] == self.N or action[1] == self.N
 
 	def isLegalAction(self, action, player, prediction=False):
 		if not prediction and player != self.nextPlayer:
