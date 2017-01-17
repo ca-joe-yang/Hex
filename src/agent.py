@@ -91,15 +91,15 @@ class Agent:
 
 		return list(actions)
 
-    def getMustWinActions(self):
+	def getMustWinActions(self):
 		graph = gameState.shannonGraphs[self.player]
 		paths = nx.all_shortest_paths(graph, HexState.TARGET_CELL[self.player][0], HexState.TARGET_CELL[self.player][1])
-        if len(paths[0]) > 2:
-            return None
-        actions = []
+		if len(paths[0]) > 2:
+			return None
+		actions = []
 		for p in paths:
 			actions.append(p[0])
-        return actions
+		return actions
 
 	def evaluationFunction(self, gameState, player):
 		'''
