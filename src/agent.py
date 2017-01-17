@@ -235,8 +235,11 @@ class ReflexAgent(Agent):
     def __init__(self, player):
         super(ReflexAgent, self).__init__(player)
 
-    def getAction(self, gameState):
-        return self.getReflexAction(gameState)	
+	def getAction(self, gameState):
+		actions = self.getReflexAction(gameState)
+		if len(actions) != 0:
+			return random.choice(actions)
+		return self.getRandomGoodAction(gameState)	
 
 class OnlyAttackAgent(Agent):
 
@@ -408,183 +411,187 @@ def appendActionHistory(actionHistory, action, player):
 
 class MonteCarloSearchAgent(Agent):
 
-    def __init__(self, player, **kwargs):
-        super(MonteCarloSearchAgent, self).__init__(player)
-        self.simulationTimeLimit = float(kwargs.get('time', 60))
-        # self.simulationActionsLimit = int(kwargs.get('max_actions', 1000))
-        # Exploration constant, increase for more exploratory actions,
-        # decrease to prefer actions with known higher win rates.
-        self.C = float(kwargs.get('C', 1.4))
-        self.dataFilename = kwargs.pop('filename')
-        self.mode = kwargs.pop('mode')
-        self.tree = self._loadTree()
+	def __init__(self, player, **kwargs):
+		super(MonteCarloSearchAgent, self).__init__(player)
+		self.simulationTimeLimit = float(kwargs.get('time', 60))
+		# self.simulationActionsLimit = int(kwargs.get('max_actions', 1000))
+		# Exploration constant, increase for more exploratory actions,
+		# decrease to prefer actions with known higher win rates.
+		self.C = float(kwargs.get('C', 1.4))
+		self.dataFilename = kwargs.pop('filename')
+		self.mode = kwargs.pop('mode')
+		self.tree = self._loadTree()
 
-    def __del__(self):
-        #pass
-        if self.mode == 'train':
-            self._saveTree()
+	def __del__(self):
+		#pass
+		if self.mode == 'train':
+			self._saveTree()
 
-    def _saveTree(self):
-        with open(self.dataFilename, 'wb') as f:
-            #print (self.tree)
-            #print (f)
-            pickle.dump(self.tree, f, protocol=4)
+	def _saveTree(self):
+		with open(self.dataFilename, 'wb') as f:
+			#print (self.tree)
+			#print (f)
+			pickle.dump(self.tree, f)#, protocol=4)
 
-    def _loadTree(self):
-        try:
-            with open(self.dataFilename, 'rb') as f:
-                return pickle.load(f)
-        except:
-            return {}
+	def _loadTree(self):
+		try:
+			with open(self.dataFilename, 'rb') as f:
+				return pickle.load(f)
+		except:
+			return {}
 
-    def getAction(self, gameState):
-        # Causes the AI to calculate the best action from the
-        # current game state and return it.
+	def getAction(self, gameState):
+		# Causes the AI to calculate the best action from the
+		# current game state and return it.
 
-        assert not gameState.isGoalState()
+		assert not gameState.isGoalState()
 
-        self.maxDepth = 0
+		self.maxDepth = 0
 
-        simulationCount = 0
-        if self.mode == 'train':
-            beginTime = time.time()
-            while time.time() - beginTime < self.simulationTimeLimit:
-                simulationCount += 1
-                reward = self.runSimulation(gameState)
-                print('Simulation', simulationCount, ', reward:', reward, '  ', end='\r')
+		simulationCount = 0
+		if self.mode == 'train':
+			beginTime = time.time()
+			while time.time() - beginTime < self.simulationTimeLimit:
+				simulationCount += 1
+				reward = self.runSimulation(gameState)
+				print('Simulation', simulationCount, ', reward:', reward, '  ', end='\r')
 
-            print()
-            print('Simulation counts:', simulationCount)
-            print('Search max depth:', self.maxDepth)
-            print('Time elapsed:', time.time() - beginTime)
+			print()
+			print('Simulation counts:', simulationCount)
+			print('Search max depth:', self.maxDepth)
+			print('Time elapsed:', time.time() - beginTime)
 
-        player = gameState.nextPlayer
-        actionHistory = gameState.actionHistory
-        actions = self.getReflexActions(gameState)
+		player = gameState.nextPlayer
+		actionHistory = gameState.actionHistory
+		actions = gameState.getGoodActions()
 
-        for action in actions:
-            t = HexState.generateNextBoard(HexState.convertBoard2BoardStr(gameState.board), action, player)
-            if t in self.tree:
-                print(action, self.tree[t])
+		for action in actions:
+			t = HexState.generateNextBoard(HexState.convertBoard2BoardStr(gameState.board), action, player)
+			if t in self.tree:
+				print(action, self.tree[t])
 
-        bestAction = max( [ action for action in actions if HexState.convertBoard2BoardStr(gameState.getNextState(action, player).board) in self.tree ], 
-                         key=lambda x: self.tree[ HexState.convertBoard2BoardStr(gameState.getNextState(x, player).board) ].getAverageValue())
+		bestAction = max( [ action for action in actions if HexState.convertBoard2BoardStr(gameState.getNextState(action, player).board) in self.tree ], 
+						 key=lambda x: self.tree[ HexState.convertBoard2BoardStr(gameState.getNextState(x, player).board) ].getAverageValue())
 
-        print('Average reward:', self.tree[ HexState.convertBoard2BoardStr(gameState.getNextState(bestAction, player).board) ].getAverageValue())
-        #self._saveTree()
-        return bestAction
+		print('Average reward:', self.tree[ HexState.convertBoard2BoardStr(gameState.getNextState(bestAction, player).board) ].getAverageValue())
+		#self._saveTree()
+		return bestAction
 
-    def runSimulation(self, gameState):
+	def runSimulation(self, gameState):
 
-        # Plays out a "random" game from the current position,
-        # then updates the statistics tables with the result.
+		# Plays out a "random" game from the current position,
+		# then updates the statistics tables with the result.
 
-        # A bit of an optimization here, so we have a local
-        # variable lookup instead of an attribute access each loop.
+		# A bit of an optimization here, so we have a local
+		# variable lookup instead of an attribute access each loop.
 
-        lastNodeKey = None
+		lastNodeKey = None
 
-        #print(gameState)
-        currentState = gameState.copy()
+		#print(gameState)
+		currentState = gameState.copy()
 
-        expand = True
-        depth = 0
-        firstPlayer = self.player
-        secondPlayer = self.opponent
-        player = firstPlayer
+		expand = True
+		depth = 0
+		firstPlayer = self.player
+		secondPlayer = self.opponent
+		player = firstPlayer
 
-        # Action Path ( BLACK, WHITE )
-        actionHistory = currentState.actionHistory
-        minActionNum = currentState.getAlreadyPlayedActionsNum()
+		# Action Path ( BLACK, WHITE )
+		#actionHistory = currentState.actionHistory
+		minActionNum = currentState.getAlreadyPlayedActionsNum()
 
-        initBoard = HexState.convertBoard2BoardStr(currentState.board)
-        board = initBoard
-        playOutPath = []
-        actionPath = []
+		initBoard = HexState.convertBoard2BoardStr(currentState.board)
+		board = initBoard
+		playOutPath = []
+		actionPath = []
 
-        begin = time.time()
-        while True:
+		begin = time.time()
+		while True:
 
-            depth += 1
-            if depth == 1:
-                actions = currentState.getGoodActions()
-            else:
-                actions = self.getReflexActions(currentState)
-                if len(actions) == 0:
-                    return list(set(self.getAttackActions(currentState, player) + self.getDefenseActions(currentState, player)))
+			depth += 1
+			actions = self.getMustWinActions(currentState, player)
+			if len(actions) == 0:
+				actions = self.getReflexActions(currentState, player)
+			if len(actions) == 0:
+				actions = self.getAttackActions(currentState, player)
+				if gameState.getAlreadyPlayedActionsNum() > 1:
+					actions |= set(self.getDefenseActions(currentState, player))
+			if len(actions) == 0:
+				actions = currentState.getGoodActions()
+			#if board in self.tree:
+			actions = list(actions)
+			playOutPath.append((board, player))
+			#print(actions)
 
-            #if board in self.tree:
-            playOutPath.append((board, player))
+			player = currentState.nextPlayer
+			nextBoards = [ HexState.generateNextBoard(board, action, player) for action in actions ]
 
-            player = currentState.nextPlayer
-            nextBoards = [ HexState.generateNextBoard(board, action, player) for action in actions ]
+			'''
+			if player == HexPlayer.BLACK:
+			nextActionHistories = [ (actionHistory[0] | frozenset({action}), actionHistory[1]) for action in actions]
+			elif player == HexPlayer.WHITE:
+			nextActionHistories = [ (actionHistory[0], frozenset({action}) | actionHistory[1]) for action in actions]
+			'''
+			if all( nextBoard in self.tree for nextBoard in nextBoards):
+				# Upper Confidence Bound
+				visitSum = sum( self.tree[nextBoard].visits for nextBoard in nextBoards )
+				#visitSum = self.tree[ board ].visits
+				logSum = log( visitSum or 1 )
+				newBoard = max( nextBoards, 
+							   key=lambda x: self.tree[x].getProgressiveBias() + self.C * sqrt(logSum / (self.tree[x].visits or 1)) )
+				newAction, checkPlayer = HexState.getNewActionFromBoards(board, newBoard)
+				assert checkPlayer == player
+			else:
+				newAction = random.choice(actions)
+				newBoard = HexState.generateNextBoard(board, newAction, player)
 
-            '''
-            if player == HexPlayer.BLACK:
-            nextActionHistories = [ (actionHistory[0] | frozenset({action}), actionHistory[1]) for action in actions]
-            elif player == HexPlayer.WHITE:
-            nextActionHistories = [ (actionHistory[0], frozenset({action}) | actionHistory[1]) for action in actions]
-            '''
-            if all( nextBoard in self.tree for nextBoard in nextBoards):
-                # Upper Confidence Bound
-                visitSum = sum( self.tree[nextBoard].visits for nextBoard in nextBoards )
-                #visitSum = self.tree[ board ].visits
-                logSum = log( visitSum or 1 )
-                newBoard = max( nextBoards, 
-                               key=lambda x: self.tree[x].getProgressiveBias() + self.C * sqrt(logSum / (self.tree[x].visits or 1)) )
-                newAction, checkPlayer = HexState.getNewActionFromBoards(board, newBoard)
-                assert checkPlayer == player
-            else:
-                newAction = random.choice(actions)
-                newBoard = HexState.generateNextBoard(board, newAction, player)
+			#newAction, checkPlayer = HexState.getNewActionFromBoards(board, newBoard)
+			#assert checkPlayer == player
+			#print(newAction)
 
-            #newAction, checkPlayer = HexState.getNewActionFromBoards(board, newBoard)
-            #assert checkPlayer == player
-            #print(newAction)
+			#print(newActionPath)
 
-            #print(newActionPath)
+			#actionHistory = newActionHistory
+			currentState.setToNextState(newAction, player)
 
-            #actionHistory = newActionHistory
-            currentState.setToNextState(newAction, player)
+			if expand and newBoard not in self.tree:
+				expand = False
+				self.tree[ newBoard ] = MonteCarloNode( self.evaluationFunction(currentState, firstPlayer) )
+				#self.tree[ board ].addChildNode( self.tree[newBoard] )
+				self.maxDepth = max(depth, self.maxDepth)
 
-            if expand and newBoard not in self.tree:
-                expand = False
-                self.tree[ newBoard ] = MonteCarloNode( self.evaluationFunction(currentState, firstPlayer) )
-                #self.tree[ board ].addChildNode( self.tree[newBoard] )
-                self.maxDepth = max(depth, self.maxDepth)
+			board = newBoard
+			actionPath.append(newAction)
 
-            board = newBoard
-            actionPath.append(newAction)
+			player = HexPlayer.OPPONENT(player)
 
-            player = HexPlayer.OPPONENT(player)
+			if currentState.isGoalState():
+				playOutPath.append((board, player))
+				break
 
-            if currentState.isGoalState():
-                playOutPath.append((board, player))
-                break
+		endBoard = board
+		reward = currentState.getReward(firstPlayer)
 
-        endBoard = board
-        reward = currentState.getReward(firstPlayer)
+		#print(playOutPath)
+		#print(actionPath)
 
-        #print(playOutPath)
-        #print(actionPath)
+		# AMAF
+		if HexState.BOARD_SIZE > 6:
+			for i in range(len(playOutPath)):
+				b, p = playOutPath[i]
+				if i < HexState.BOARD_SIZE-7 and gameState.getAlreadyPlayedActionsNum()>4:
+					for a in actionPath:
+						if a == actionPath[0]:
+							continue
+						sibling = HexState.generateNextBoard(b, a, p)
+						if sibling in self.tree:
+							self.tree[sibling].update(reward)
+					if len(actionPath) > 0:
+						actionPath.remove(actionPath[0])
 
-        # AMAF
-        if HexState.BOARD_SIZE > 6:
-            for i in range(len(playOutPath)):
-                b, p = playOutPath[i]
-                if i < HexState.BOARD_SIZE-6:
-                    for a in actionPath:
-                        if a == actionPath[0]:
-                            continue
-                        sibling = HexState.generateNextBoard(b, a, p)
-                        if sibling in self.tree:
-                            self.tree[sibling].update(reward)
-                    if len(actionPath) > 0:
-                        actionPath.remove(actionPath[0])
+		for b, p in playOutPath:
+			if b in self.tree:
+				self.tree[b].update(reward)
 
-        for b, p in playOutPath:
-            if b in self.tree:
-                self.tree[b].update(reward)
-
-        return reward
+		return reward
 
