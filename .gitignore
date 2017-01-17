@@ -1,3 +1,6 @@
 HexAI
 data
 papers
+.DS*
+*lock*
+*~*
